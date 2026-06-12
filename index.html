@@ -181,7 +181,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
       </div>
       <div style="margin-top:10px" id="sAccountWrap"><label class="fld">Catégorie — de quoi s'agit-il ?</label>
         <select id="sAccount" onchange="App.onSimpleAccountChange(this)"></select>
-        <div class="muted" style="margin-top:3px">Toutes les catégories du plan comptable sont listées, groupées par famille. Il en manque une ? Choisissez « ➕ Créer une nouvelle catégorie » en bas de la liste.</div></div>
+        <div class="muted" style="margin-top:3px">Tout le plan comptable est listé : les catégories courantes d'abord, puis les autres comptes (« Autres · » : paiement de l'ONSS, du précompte, d'un fournisseur, achat de matériel durable…). Il en manque une ? Choisissez « ➕ Créer une nouvelle catégorie » en bas de la liste.</div></div>
       <div style="margin-top:10px"><label class="fld">Description (pour vous y retrouver)</label>
         <input type="text" id="sComment" placeholder="Ex : fournitures goûters Colruyt"></div>
       <div style="margin-top:14px">
@@ -278,7 +278,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
     <div class="ex">💡 <b>Exemples :</b> vous achetez des collations pour 23,50 € avec la carte de l'ASBL → Dépense, Banque, catégorie « Fournitures pour goûters ».<br>
     La commune verse un subside de 990 € → Recette, Banque, catégorie « Subventions communales ».<br>
     Un parent paie 15 € en liquide pour l'école des devoirs → Recette, Caisse, catégorie « Recettes école des devoirs ».</div>
-    <p>La liste des catégories est groupée par famille (fonctionnement, personnel, subsides…). S'il manque une catégorie, choisissez <b>« ➕ Créer une nouvelle catégorie »</b> tout en bas de la liste : donnez-lui un nom, c'est tout. Pour retirer ou déposer du liquide, utilisez le type <b>« Virement entre banque et caisse »</b>.</p>
+    <p>La liste des catégories est groupée par famille (fonctionnement, personnel, subsides…). Les catégories courantes apparaissent en premier ; en dessous, les groupes « Autres · » donnent accès à <b>tout le plan comptable</b> : payer l'ONSS ou le précompte professionnel (Dépense → « Autres · Dettes sociales et fiscales »), payer une facture fournisseur, acheter du matériel durable (→ « Autres · Mobilier et matériel »)… S'il manque une catégorie, choisissez <b>« ➕ Créer une nouvelle catégorie »</b> tout en bas de la liste : donnez-lui un nom, c'est tout. Pour retirer ou déposer du liquide, utilisez le type <b>« Virement entre banque et caisse »</b>.</p>
 
     <h3>2. Je me suis trompé·e, comment corriger ?</h3>
     <p>Tout est modifiable, rien n'est définitif :</p>
@@ -867,8 +867,16 @@ const App = {
     wrap.style.display = "";
     modeLbl.textContent = "Par banque ou en liquide ?";
     modeSel.innerHTML = `<option value="550000">Banque (550000)</option><option value="570000">Caisse — argent liquide (570000)</option>`;
-    const cls = type==="dep" ? "6" : "7";
     const GROUPS = {
+      "10":"Fonds de l'association","13":"Fonds affectés","14":"Résultat reporté",
+      "16":"Provisions","17":"Dettes à plus d'un an",
+      "22":"Terrains et bâtiments (investissements)","23":"Installations (investissements)",
+      "24":"Mobilier et matériel (investissements)",
+      "30":"Stocks","40":"Créances — argent à recevoir","41":"Créances diverses",
+      "44":"Fournisseurs et factures à recevoir","45":"Dettes sociales et fiscales (ONSS, précompte…)",
+      "46":"Autres dettes","47":"Autres dettes","48":"Autres dettes","49":"Comptes de régularisation",
+      "50":"Placements","51":"Placements","52":"Placements","53":"Placements",
+      "54":"Valeurs disponibles","55":"Banques","56":"Banques","57":"Caisses","58":"Virements internes",
       "60":"Achats et marchandises","61":"Fonctionnement, biens et services",
       "62":"Personnel et rémunérations","63":"Amortissements et provisions",
       "64":"Autres charges","65":"Charges financières","66":"Charges exceptionnelles",
@@ -876,20 +884,30 @@ const App = {
       "73":"Cotisations, dons et subsides","74":"Subsides et produits divers",
       "75":"Produits financiers","76":"Produits exceptionnels"
     };
-    const accs = accountsSorted().filter(a=>a.code[0]===cls);
-    let html = "", curGrp = null;
-    accs.forEach(a=>{
-      const g = a.code.slice(0,2);
-      if(g!==curGrp){
-        if(curGrp!==null) html += `</optgroup>`;
-        html += `<optgroup label="${GROUPS[g]||("Comptes "+g)}">`;
-        curGrp = g;
-      }
-      html += `<option value="${a.code}">${a.code} — ${esc(a.label)}</option>`;
-    });
-    if(curGrp!==null) html += `</optgroup>`;
-    html += `<optgroup label="────────────"><option value="__new__">➕ Créer une nouvelle catégorie…</option></optgroup>`;
-    document.getElementById("sAccount").innerHTML = html;
+    const groupName = c => GROUPS[c.slice(0,2)] || ({"1":"Fonds et dettes long terme","2":"Investissements (immobilisations)","3":"Stocks","4":"Créances et dettes","5":"Placements et liquidités"}[c[0]]) || ("Comptes "+c.slice(0,2));
+    const buildGroups = (accs, prefix)=>{
+      let html = "", curGrp = null;
+      accs.forEach(a=>{
+        const g = groupName(a.code);
+        if(g!==curGrp){
+          if(curGrp!==null) html += `</optgroup>`;
+          html += `<optgroup label="${esc(prefix+g)}">`;
+          curGrp = g;
+        }
+        html += `<option value="${a.code}">${a.code} — ${esc(a.label)}</option>`;
+      });
+      if(curGrp!==null) html += `</optgroup>`;
+      return html;
+    };
+    const cls = type==="dep" ? "6" : "7";
+    // banque et caisse sont gérées par « Par banque ou en liquide ? » et le virement
+    const all = accountsSorted().filter(a=>a.code!=="550000" && a.code!=="570000");
+    const main = all.filter(a=>a.code[0]===cls);          // catégories courantes d'abord
+    const others = all.filter(a=>a.code[0]!==cls);        // puis tous les autres comptes
+    document.getElementById("sAccount").innerHTML =
+      buildGroups(main, "") +
+      buildGroups(others, "Autres · ") +
+      `<optgroup label="────────────"><option value="__new__">➕ Créer une nouvelle catégorie…</option></optgroup>`;
   },
   onSimpleAccountChange(sel){
     if(sel.value!=="__new__") return;
@@ -957,9 +975,8 @@ const App = {
     const fin = e.lines.find(l=>l.account==="550000"||l.account==="570000");
     const oth = e.lines.find(l=>l.account!=="550000"&&l.account!=="570000");
     if(!fin || !oth) return null;
-    const cls = oth.account[0];
-    if(cls==="6" && oth.debit>0 && fin.credit>0) return {type:"dep", fin:fin.account, acc:oth.account, amount:oth.debit};
-    if(cls==="7" && oth.credit>0 && fin.debit>0) return {type:"rec", fin:fin.account, acc:oth.account, amount:oth.credit};
+    if(oth.debit>0 && fin.credit>0) return {type:"dep", fin:fin.account, acc:oth.account, amount:oth.debit};
+    if(oth.credit>0 && fin.debit>0) return {type:"rec", fin:fin.account, acc:oth.account, amount:oth.credit};
     return null;
   },
   saveSimple(){
