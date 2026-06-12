@@ -61,6 +61,12 @@ table.data tr:hover td{background:#f8faf8}
 .lines-table select{font-size:13px;padding:6px 4px}
 .msg{position:fixed;bottom:20px;right:20px;background:var(--accent-dark);color:#fff;padding:12px 20px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none;z-index:99}
 .msg.err{background:var(--danger)}
+#lockScreen{position:fixed;inset:0;background:linear-gradient(160deg,#1b5e20,#2e7d32);display:none;align-items:center;justify-content:center;z-index:100}
+#lockScreen .box{background:#fff;border-radius:12px;padding:30px 34px;width:340px;max-width:90vw;box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center}
+#lockScreen h2{margin:0 0 6px;color:var(--accent-dark)}
+#lockScreen p{color:var(--muted);font-size:13px;margin:0 0 16px}
+#lockScreen input{text-align:center;font-size:16px}
+#lockScreen .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
 
 /* ---------- Rendu "fiche fiduciaire" ---------- */
 #reportContent{background:#fff;border:1px solid var(--line);border-radius:8px;padding:30px 40px;font-family:"Times New Roman",Georgia,serif;font-size:14px;line-height:1.5}
@@ -105,6 +111,16 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
 </style>
 </head>
 <body>
+
+<div id="lockScreen">
+  <div class="box">
+    <h2>🔒 Comptabilité protégée</h2>
+    <p>Entrez le mot de passe pour déchiffrer les données.</p>
+    <input type="password" id="lockPwd" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')App.unlock()">
+    <div class="err" id="lockErr"></div>
+    <button class="btn" style="margin-top:10px;width:100%" onclick="App.unlock()">Déverrouiller</button>
+  </div>
+</div>
 
 <header class="topbar no-print">
   <h1 id="appTitle">EDD ASBL — Comptabilité</h1>
@@ -250,6 +266,17 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
         <button class="btn secondary" onclick="document.getElementById('restoreFile').click()">⬆️ Restaurer une sauvegarde</button>
         <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="App.restore(this)">
       </div>
+      <p class="muted">⚠ Le fichier de sauvegarde n'est pas chiffré : conservez-le en lieu sûr. Il permet de récupérer les données en cas d'oubli du mot de passe.</p>
+      <h2 style="margin-top:24px">Mot de passe</h2>
+      <p class="muted" id="pwdStatus"></p>
+      <div class="row">
+        <div><label class="fld">Nouveau mot de passe</label><input type="password" id="setPwd1"></div>
+        <div><label class="fld">Confirmation</label><input type="password" id="setPwd2"></div>
+      </div>
+      <div class="toolbar" style="margin-top:10px">
+        <button class="btn" onclick="App.setPassword()">Activer / changer le mot de passe</button>
+        <button class="btn secondary" id="pwdRemoveBtn" onclick="App.removePassword()">Désactiver</button>
+      </div>
       <h2 style="margin-top:24px">Clôture d'exercice</h2>
       <p class="muted">Génère l'écriture d'ouverture de l'exercice suivant : report des soldes des comptes de bilan et affectation du résultat au compte 140000.</p>
       <button class="btn" onclick="App.closeYear()">Générer l'ouverture de l'exercice <span id="nextYearLbl"></span></button>
@@ -360,14 +387,35 @@ function defaultDB(){
     entries: []   // {id, journal, piece, date:"YYYY-MM-DD", comment, lines:[{account, debit, credit}]}
   };
 }
-function load(){
-  try{ DB = JSON.parse(localStorage.getItem(STORE_KEY)) || defaultDB(); }
-  catch(e){ DB = defaultDB(); }
+/* ---------- stockage chiffré (AES-256-GCM, clé dérivée du mot de passe) ---------- */
+let cryptoKey = null, passSalt = null;
+const txtEnc = new TextEncoder(), txtDec = new TextDecoder();
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+async function deriveKey(pwd, salt){
+  const km = await crypto.subtle.importKey("raw", txtEnc.encode(pwd), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:200000, hash:"SHA-256"}, km,
+    {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+function loadPlain(obj){
+  DB = obj || defaultDB();
   if(!DB.settings) DB.settings = defaultDB().settings;
   if(!DB.accounts) DB.accounts = defaultDB().accounts;
   if(!DB.entries) DB.entries = [];
 }
-function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
+let _saving = Promise.resolve();
+function save(){
+  _saving = _saving.then(async ()=>{
+    if(cryptoKey){
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const data = await crypto.subtle.encrypt({name:"AES-GCM", iv}, cryptoKey, txtEnc.encode(JSON.stringify(DB)));
+      localStorage.setItem(STORE_KEY, JSON.stringify({__enc:1, salt:b64(passSalt), iv:b64(iv), data:b64(data)}));
+    } else {
+      localStorage.setItem(STORE_KEY, JSON.stringify(DB));
+    }
+  }).catch(e=>toast("Erreur d'enregistrement : "+e.message, true));
+  return _saving;
+}
 
 /* ---------- utilitaires ---------- */
 const r2 = x => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -440,13 +488,73 @@ function resultOfYear(bal){
 const App = {
 
   init(){
-    load();
+    let raw = null;
+    try{ raw = JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){}
+    if(raw && raw.__enc===1){
+      this._encBlob = raw;
+      document.getElementById("lockScreen").style.display = "flex";
+      document.getElementById("lockPwd").focus();
+      return;
+    }
+    loadPlain(raw);
+    this.start();
+  },
+  async unlock(){
+    const pwd = document.getElementById("lockPwd").value;
+    const errEl = document.getElementById("lockErr");
+    if(!pwd){ errEl.textContent = "Entrez le mot de passe."; return; }
+    if(!crypto.subtle){ errEl.textContent = "Chiffrement indisponible dans ce navigateur."; return; }
+    try{
+      const blob = this._encBlob;
+      passSalt = unb64(blob.salt);
+      cryptoKey = await deriveKey(pwd, passSalt);
+      const plain = await crypto.subtle.decrypt({name:"AES-GCM", iv:unb64(blob.iv)}, cryptoKey, unb64(blob.data));
+      loadPlain(JSON.parse(txtDec.decode(plain)));
+      document.getElementById("lockScreen").style.display = "none";
+      document.getElementById("lockPwd").value = "";
+      errEl.textContent = "";
+      this.start();
+    }catch(e){
+      cryptoKey = null; passSalt = null;
+      errEl.textContent = "Mot de passe incorrect.";
+    }
+  },
+  start(){
     this.refreshYears();
     this.fillSelectors();
     this.applySettingsToUI();
     this.resetEntryForm();
     this.resetSimpleForm();
+    this.updatePwdStatus();
     this.renderAll();
+  },
+  updatePwdStatus(){
+    const on = !!cryptoKey;
+    const el = document.getElementById("pwdStatus");
+    el.textContent = on
+      ? "🔒 Protection active : les données sont chiffrées (AES-256). Le mot de passe sera demandé à chaque ouverture."
+      : "🔓 Aucun mot de passe : les données sont lisibles par toute personne ayant accès à ce navigateur.";
+    document.getElementById("pwdRemoveBtn").style.display = on ? "inline-block" : "none";
+  },
+  async setPassword(){
+    if(!crypto.subtle) return toast("Chiffrement indisponible dans ce navigateur (ouvrez le fichier dans Chrome, Edge ou Firefox).", true);
+    const p1 = document.getElementById("setPwd1").value, p2 = document.getElementById("setPwd2").value;
+    if(p1.length<4) return toast("Le mot de passe doit comporter au moins 4 caractères.", true);
+    if(p1!==p2) return toast("Les deux mots de passe ne correspondent pas.", true);
+    passSalt = crypto.getRandomValues(new Uint8Array(16));
+    cryptoKey = await deriveKey(p1, passSalt);
+    await save();
+    document.getElementById("setPwd1").value = "";
+    document.getElementById("setPwd2").value = "";
+    this.updatePwdStatus();
+    toast("Mot de passe activé — données chiffrées ✔");
+  },
+  async removePassword(){
+    if(!confirm("Désactiver le mot de passe ? Les données seront enregistrées sans chiffrement.")) return;
+    cryptoKey = null; passSalt = null;
+    await save();
+    this.updatePwdStatus();
+    toast("Mot de passe désactivé.");
   },
 
   /* ----- navigation ----- */
@@ -754,7 +862,8 @@ const App = {
   resetAll(){
     if(!confirm("Effacer TOUTES les données (écritures, comptes, paramètres) ? Cette action est irréversible.")) return;
     if(!confirm("Vraiment sûr ? Pensez à faire une sauvegarde d'abord.")) return;
-    DB = defaultDB(); save();
+    DB = defaultDB(); cryptoKey = null; passSalt = null; save();
+    this.updatePwdStatus();
     this.fillSelectors(); this.applySettingsToUI(); this.renderAll();
     toast("Données effacées.");
   },

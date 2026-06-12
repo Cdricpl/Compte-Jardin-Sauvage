@@ -9,10 +9,25 @@ historique des comptes généraux.
 ## Démarrage
 
 Aucune installation : ouvrez simplement le fichier **`index.html`** dans un
-navigateur (Chrome, Edge, Firefox…). Tout fonctionne hors ligne.
+navigateur (Chrome, Edge, Firefox…). Tout fonctionne **hors ligne** — aucune
+connexion internet n'est nécessaire, le fichier peut être copié sur une clé
+USB ou le bureau de l'ordinateur.
 
 > Les données sont enregistrées localement dans le navigateur (localStorage).
 > Pensez à faire régulièrement une **sauvegarde JSON** via l'onglet *Paramètres*.
+
+## Protection par mot de passe
+
+Dans l'onglet *Paramètres*, section **Mot de passe**, vous pouvez activer une
+protection : les données comptables sont alors **chiffrées** (AES-256-GCM, clé
+dérivée du mot de passe par PBKDF2) et le mot de passe est demandé à chaque
+ouverture du programme.
+
+- Sans le mot de passe, les données stockées sont illisibles.
+- ⚠ **Il n'existe aucun moyen de récupérer un mot de passe oublié.** Faites
+  régulièrement une sauvegarde JSON (non chiffrée) et conservez-la en lieu
+  sûr : elle permet de restaurer la comptabilité en cas d'oubli.
+- Le mot de passe peut être changé ou désactivé à tout moment dans *Paramètres*.
 
 ## Utilisation
 
