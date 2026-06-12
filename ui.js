@@ -3,9 +3,12 @@
 const App = {
 
   /* ── Démarrage ── */
-  init(){
+  async init(){
     let raw = null;
-    try{ raw = JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){}
+    try{
+      const stored = await storageRead();
+      if(stored) raw = JSON.parse(stored);
+    }catch(e){}
     if(raw && raw.__enc===1){
       this._encBlob = raw;
       document.getElementById("lockScreen").style.display = "flex";
@@ -51,6 +54,7 @@ const App = {
 
   /* ── Sauvegarde automatique dans un fichier (File System Access API) ── */
   async initAutoFile(){
+    if(isTauri){ this.updateAutoFileStatus(); return; }
     if(typeof indexedDB==="undefined" || !window.showSaveFilePicker){ this.updateAutoFileStatus(); return; }
     const h = await idbGet("autoFile");
     if(h){
@@ -118,6 +122,10 @@ const App = {
     const el     = document.getElementById("autoFileStatus");
     const onBtn  = document.getElementById("autoFileOnBtn");
     const offBtn = document.getElementById("autoFileOffBtn");
+    if(isTauri){
+      el.textContent = "✅ Application de bureau — les données sont enregistrées automatiquement dans le dossier AppData de Windows.";
+      onBtn.style.display = "none"; offBtn.style.display = "none"; return;
+    }
     if(!window.showSaveFilePicker){
       el.textContent = "Non disponible dans ce navigateur (fonctionne avec Chrome et Edge). Utilisez la sauvegarde manuelle ci-dessous.";
       onBtn.style.display = "none"; offBtn.style.display = "none"; return;
@@ -136,7 +144,7 @@ const App = {
 
   renderNotices(){
     const parts = [];
-    if(this._fsNeedsPerm)
+    if(!isTauri && this._fsNeedsPerm)
       parts.push(`<div class="notice"><div class="grow">📁 Pour des raisons de sécurité, le navigateur demande votre accord pour reprendre la <b>sauvegarde automatique</b> dans le fichier.</div>
         <button class="btn small" onclick="App.resumeAutoFile()">Réactiver</button></div>`);
     const last = parseInt(localStorage.getItem(EXPORT_KEY)||"0", 10);
@@ -150,26 +158,30 @@ const App = {
   renderSnapshots(){
     const el = document.getElementById("snapshotList");
     if(!el) return;
-    let snaps = [];
-    try{ snaps = JSON.parse(localStorage.getItem(SNAP_KEY)||"[]"); }catch(e){}
-    if(!snaps.length){ el.innerHTML = `<p class="muted">Aucune version pour l'instant.</p>`; return; }
-    el.innerHTML = `<table class="data"><tbody>` + snaps.map((s,i)=>{
-      const d    = new Date(s.t);
-      const when = d.toLocaleDateString("fr-BE") + " " + d.toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-      const cur  = i===snaps.length-1 ? ` <span class="badge">état actuel</span>` : "";
-      return `<tr><td>Version du ${when}${cur}</td>
-        <td style="text-align:right">${i===snaps.length-1?"":`<button class="btn small secondary" onclick="App.restoreSnapshot(${i})">↩ Revenir à cette version</button>`}</td></tr>`;
-    }).reverse().join("") + `</tbody></table>`;
+    (async ()=>{
+      let snaps = [];
+      try{ const raw = await snapshotsRead(); snaps = JSON.parse(raw||"[]"); }catch(e){}
+      if(!snaps.length){ el.innerHTML = `<p class="muted">Aucune version pour l'instant.</p>`; return; }
+      el.innerHTML = `<table class="data"><tbody>` + snaps.map((s,i)=>{
+        const d    = new Date(s.t);
+        const when = d.toLocaleDateString("fr-BE") + " " + d.toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+        const cur  = i===snaps.length-1 ? ` <span class="badge">état actuel</span>` : "";
+        return `<tr><td>Version du ${when}${cur}</td>
+          <td style="text-align:right">${i===snaps.length-1?"":`<button class="btn small secondary" onclick="App.restoreSnapshot(${i})">↩ Revenir à cette version</button>`}</td></tr>`;
+      }).reverse().join("") + `</tbody></table>`;
+    })();
   },
 
   restoreSnapshot(i){
-    let snaps = [];
-    try{ snaps = JSON.parse(localStorage.getItem(SNAP_KEY)||"[]"); }catch(e){}
-    const s = snaps[i]; if(!s) return;
-    const d = new Date(s.t);
-    if(!confirm(`Revenir à la version du ${d.toLocaleDateString("fr-BE")} à ${d.toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit"})} ?\n\nLes modifications faites après ce moment seront annulées (l'état actuel reste disponible dans la liste des versions).`)) return;
-    localStorage.setItem(STORE_KEY, s.raw);
-    location.reload();
+    (async ()=>{
+      let snaps = [];
+      try{ const raw = await snapshotsRead(); snaps = JSON.parse(raw||"[]"); }catch(e){}
+      const s = snaps[i]; if(!s) return;
+      const d = new Date(s.t);
+      if(!confirm(`Revenir à la version du ${d.toLocaleDateString("fr-BE")} à ${d.toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit"})} ?\n\nLes modifications faites après ce moment seront annulées (l'état actuel reste disponible dans la liste des versions).`)) return;
+      await storageWrite(s.raw);
+      location.reload();
+    })();
   },
 
   /* ── Mot de passe ── */
@@ -656,8 +668,7 @@ const App = {
         const data = JSON.parse(r.result);
         if(data.__enc===1){
           if(confirm("Cette sauvegarde est protégée par un mot de passe. La charger ? (le mot de passe sera demandé)")){
-            localStorage.setItem(STORE_KEY, r.result);
-            location.reload();
+            storageWrite(r.result).then(()=>location.reload());
           }
           input.value=""; return;
         }
@@ -744,4 +755,4 @@ const App = {
 };
 
 document.getElementById("sType").addEventListener("change", ()=>App.fillSimpleAccounts());
-window.addEventListener("DOMContentLoaded", ()=>App.init());
+window.addEventListener("DOMContentLoaded", ()=>{ App.init().catch(e=>console.error("Init:", e)); });

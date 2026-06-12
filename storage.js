@@ -1,5 +1,26 @@
 "use strict";
 
+/* ── Détection Tauri (desktop) vs navigateur ── */
+const isTauri = typeof window !== 'undefined' && typeof window.__TAURI__ !== 'undefined';
+
+/* ── Abstraction stockage (Tauri : fichier système / navigateur : localStorage) ── */
+async function storageRead(){
+  if(isTauri) return window.__TAURI__.core.invoke('read_data');
+  try{ return localStorage.getItem(STORE_KEY); }catch(e){ return null; }
+}
+async function storageWrite(raw){
+  if(isTauri){ await window.__TAURI__.core.invoke('write_data', {data: raw}); return; }
+  localStorage.setItem(STORE_KEY, raw);
+}
+async function snapshotsRead(){
+  if(isTauri) return window.__TAURI__.core.invoke('read_snapshots');
+  try{ return localStorage.getItem(SNAP_KEY); }catch(e){ return null; }
+}
+async function snapshotsWrite(raw){
+  if(isTauri){ await window.__TAURI__.core.invoke('write_snapshots', {data: raw}); return; }
+  localStorage.setItem(SNAP_KEY, raw);
+}
+
 /* ── IndexedDB minimal (mémoriser le handle de sauvegarde auto) ── */
 function idbOpen(){
   return new Promise((res,rej)=>{
@@ -72,12 +93,13 @@ function loadPlain(obj){
 }
 
 /* ── Snapshots (filet de sécurité : 15 derniers états) ── */
-function pushSnapshot(raw){
+async function pushSnapshot(raw){
   try{
-    const snaps = JSON.parse(localStorage.getItem(SNAP_KEY)||"[]");
+    const existing = await snapshotsRead();
+    const snaps = JSON.parse(existing||"[]");
     snaps.push({t:Date.now(), raw});
     while(snaps.length>15) snaps.shift();
-    localStorage.setItem(SNAP_KEY, JSON.stringify(snaps));
+    await snapshotsWrite(JSON.stringify(snaps));
   }catch(e){}
 }
 
@@ -101,10 +123,10 @@ function save(){
     } else {
       raw = JSON.stringify(DB);
     }
-    localStorage.setItem(STORE_KEY, raw);
-    pushSnapshot(raw);
+    await storageWrite(raw);
+    await pushSnapshot(raw);
     stampSaved();
-    if(autoHandle) await App.writeAutoFile();
+    if(!isTauri && autoHandle) await App.writeAutoFile();
   }).catch(e=>toast("Erreur d'enregistrement : "+e.message, true));
   return _saving;
 }

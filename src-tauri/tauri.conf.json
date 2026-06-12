@@ -1,0 +1,39 @@
+{
+  "productName": "EDD Compta",
+  "version": "1.0.0",
+  "identifier": "be.asbl.edd.compta",
+  "build": {
+    "frontendDist": "../"
+  },
+  "app": {
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "title": "EDD ASBL — Comptabilité",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "wix": {},
+      "nsis": {}
+    }
+  }
+}
