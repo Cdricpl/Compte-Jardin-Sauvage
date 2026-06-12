@@ -8,13 +8,30 @@ historique des comptes généraux.
 
 ## Démarrage
 
-Aucune installation : ouvrez simplement le fichier **`index.html`** dans un
-navigateur (Chrome, Edge, Firefox…). Tout fonctionne **hors ligne** — aucune
-connexion internet n'est nécessaire, le fichier peut être copié sur une clé
-USB ou le bureau de l'ordinateur.
+### Application de bureau (recommandé — Windows)
 
-> Les données sont enregistrées localement dans le navigateur (localStorage).
-> Pensez à faire régulièrement une **sauvegarde JSON** via l'onglet *Paramètres*.
+Installez le programme comme un vrai logiciel : double-cliquez sur
+l'installateur **`EDD Compta_x.y.z_x64-setup.exe`** (ou le `.msi`), puis lancez
+l'application depuis le menu Démarrer. Aucune connexion internet n'est
+nécessaire.
+
+> Les données sont enregistrées dans un **fichier sur l'ordinateur**
+> (`AppData\Roaming\EDD-Compta\compta.json` sous Windows) — elles ne sont
+> **jamais perdues** en vidant le cache du navigateur. Faites tout de même
+> régulièrement une **sauvegarde JSON** via l'onglet *Paramètres*.
+
+Les installateurs sont produits automatiquement par GitHub Actions (onglet
+*Actions* du dépôt) et téléchargeables dans les *Artifacts* de chaque build.
+
+### Mode navigateur (sans installation)
+
+Ouvrez le fichier **`app/index.html`** dans un navigateur (Chrome, Edge,
+Firefox…). Tout fonctionne **hors ligne**, le dossier peut être copié sur une
+clé USB.
+
+> En mode navigateur, les données sont enregistrées dans le navigateur
+> (localStorage). Pensez à faire régulièrement une **sauvegarde JSON** via
+> l'onglet *Paramètres* — un cache vidé efface alors les données.
 
 ## Protection par mot de passe
 
