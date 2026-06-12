@@ -1,23 +1,49 @@
 "use strict";
 
 /* ── Détection Tauri (desktop) vs navigateur ── */
-const isTauri = typeof window !== 'undefined' && typeof window.__TAURI__ !== 'undefined';
+const isTauri = typeof window !== 'undefined' && typeof window.__TAURI__ !== 'undefined'
+             && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function';
+
+/* Si l'IPC Tauri ne répond pas (timeout/erreur), on bascule sur localStorage
+   pour que l'application démarre TOUJOURS, avec un avertissement visible. */
+let tauriBroken = false;
+
+function invokeT(cmd, args){
+  return new Promise((resolve, reject)=>{
+    const h = setTimeout(()=>reject(new Error("le stockage de l'application ne répond pas")), 3000);
+    window.__TAURI__.core.invoke(cmd, args).then(
+      v=>{ clearTimeout(h); resolve(v); },
+      e=>{ clearTimeout(h); reject(e); });
+  });
+}
 
 /* ── Abstraction stockage (Tauri : fichier système / navigateur : localStorage) ── */
 async function storageRead(){
-  if(isTauri) return window.__TAURI__.core.invoke('read_data');
+  if(isTauri && !tauriBroken){
+    try{ return await invokeT('read_data'); }
+    catch(e){ tauriBroken = true; console.error("Stockage fichier indisponible :", e); }
+  }
   try{ return localStorage.getItem(STORE_KEY); }catch(e){ return null; }
 }
 async function storageWrite(raw){
-  if(isTauri){ await window.__TAURI__.core.invoke('write_data', {data: raw}); return; }
+  if(isTauri && !tauriBroken){
+    try{ await invokeT('write_data', {data: raw}); return; }
+    catch(e){ tauriBroken = true; console.error("Stockage fichier indisponible :", e); }
+  }
   localStorage.setItem(STORE_KEY, raw);
 }
 async function snapshotsRead(){
-  if(isTauri) return window.__TAURI__.core.invoke('read_snapshots');
+  if(isTauri && !tauriBroken){
+    try{ return await invokeT('read_snapshots'); }
+    catch(e){ tauriBroken = true; }
+  }
   try{ return localStorage.getItem(SNAP_KEY); }catch(e){ return null; }
 }
 async function snapshotsWrite(raw){
-  if(isTauri){ await window.__TAURI__.core.invoke('write_snapshots', {data: raw}); return; }
+  if(isTauri && !tauriBroken){
+    try{ await invokeT('write_snapshots', {data: raw}); return; }
+    catch(e){ tauriBroken = true; }
+  }
   localStorage.setItem(SNAP_KEY, raw);
 }
 

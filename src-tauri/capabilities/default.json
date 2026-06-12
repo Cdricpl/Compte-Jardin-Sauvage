@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions IPC de la fenêtre principale (requis pour invoke/read_data/write_data)",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

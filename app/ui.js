@@ -144,6 +144,8 @@ const App = {
 
   renderNotices(){
     const parts = [];
+    if(tauriBroken)
+      parts.push(`<div class="notice"><div class="grow">⚠ Le <b>stockage fichier de l'application</b> ne répond pas : les données sont enregistrées dans le stockage interne en attendant. Faites une <b>sauvegarde JSON</b> (Paramètres) par précaution.</div></div>`);
     if(!isTauri && this._fsNeedsPerm)
       parts.push(`<div class="notice"><div class="grow">📁 Pour des raisons de sécurité, le navigateur demande votre accord pour reprendre la <b>sauvegarde automatique</b> dans le fichier.</div>
         <button class="btn small" onclick="App.resumeAutoFile()">Réactiver</button></div>`);
@@ -754,5 +756,20 @@ const App = {
   },
 };
 
+/* Garde-fou : toute erreur au démarrage doit être VISIBLE, jamais un écran vide. */
+function showFatal(msg){
+  const el = document.getElementById("notices");
+  if(el) el.innerHTML = `<div class="notice"><div class="grow">❌ <b>Erreur au démarrage :</b> ${esc(msg)}<br>
+    Réessayez de fermer/rouvrir l'application. Si le problème persiste, signalez ce message.</div></div>` + el.innerHTML;
+}
+window.addEventListener("error", e=>showFatal(e.message||"erreur inconnue"));
+
 document.getElementById("sType").addEventListener("change", ()=>App.fillSimpleAccounts());
-window.addEventListener("DOMContentLoaded", ()=>{ App.init().catch(e=>console.error("Init:", e)); });
+window.addEventListener("DOMContentLoaded", ()=>{
+  App.init().catch(e=>{
+    console.error("Init:", e);
+    showFatal(e.message||String(e));
+    if(!DB) loadPlain(null);          // ne jamais écraser des données déjà chargées
+    try{ App.start(); }catch(e2){ console.error(e2); }
+  });
+});
