@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -80,3 +83,51 @@ jobs:
         with:
           name: EDD-Compta-Linux-AppImage
           path: src-tauri/target/release/bundle/appimage/*.AppImage
+
+  release:
+    needs: [build-windows, build-linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: EDD Compta ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          body: |
+            ## EDD Compta — application de comptabilité ASBL
+
+            Comptabilité en partie double pour ASBL belge (plan PCMN),
+            100 % hors ligne. Les données sont enregistrées dans un fichier
+            local (`AppData\Roaming\EDD-Compta\compta.json` sous Windows) —
+            elles ne sont **jamais perdues** en vidant le cache du navigateur.
+
+            ### Installation Windows
+            1. Téléchargez **`EDD.Compta_*_x64-setup.exe`** ci-dessous.
+            2. Double-cliquez. Si Windows affiche « Windows a protégé votre
+               ordinateur » : **Informations complémentaires → Exécuter quand même**
+               (normal pour un programme non signé).
+            3. Lancez « EDD Compta » depuis le menu Démarrer.
+
+            > ⚠ Si vous activez un mot de passe, il est **irrécupérable** s'il est
+            > oublié. Faites régulièrement une sauvegarde JSON (Paramètres) et
+            > conservez-la en lieu sûr.
+
+            ### Fichiers
+            - `*_x64-setup.exe` — installateur Windows (recommandé)
+            - `*_x64_en-US.msi` — installateur Windows (format MSI)
+            - `*_amd64.AppImage` — version Linux
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.msi
+            artifacts/**/*.AppImage
