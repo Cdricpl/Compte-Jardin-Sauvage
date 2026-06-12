@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"Permissions IPC de la fenêtre principale (requis pour invoke/read_data/write_data)","local":true,"windows":["main"],"permissions":["core:default"]}}
