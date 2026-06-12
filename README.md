@@ -29,6 +29,29 @@ ouverture du programme.
   sûr : elle permet de restaurer la comptabilité en cas d'oubli.
 - Le mot de passe peut être changé ou désactivé à tout moment dans *Paramètres*.
 
+## Aucune perte de données
+
+- **Enregistrement automatique** : chaque action est sauvée immédiatement
+  (indicateur 💾 en haut de l'écran) — il n'y a pas de bouton « sauver » à oublier.
+- **Tout est corrigeable** : chaque opération encodée peut être modifiée
+  (bouton « ✎ Modifier ») ou supprimée, depuis le tableau de bord ou l'onglet
+  *Opérations*. Les opérations simples se rouvrent dans le formulaire facile.
+- **Versions précédentes** : les 15 derniers états de la comptabilité sont
+  conservés ; on peut revenir en arrière en un clic (onglet *Paramètres*).
+- **Sauvegarde automatique dans un fichier** : dans *Paramètres*, choisissez un
+  fichier (PC ou clé USB) qui sera mis à jour à chaque modification
+  (Chrome / Edge).
+- **Rappel** : si aucune copie de sécurité n'a été faite depuis 14 jours, un
+  bandeau le rappelle.
+
+## Pour les débutants
+
+L'onglet **❓ Aide** explique tout sans jargon : comment encoder une dépense ou
+une recette, comment corriger une erreur, quoi faire en fin d'année, et un
+petit lexique. L'encodage courant se fait via le formulaire « Opération
+simple » : type (argent qui sort / qui rentre), banque ou caisse, montant,
+catégorie — la partie double est générée automatiquement.
+
 ## Utilisation
 
 1. **Paramètres** : encodez la dénomination de l'ASBL, l'adresse, le n° BCE et

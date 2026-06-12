@@ -61,6 +61,12 @@ table.data tr:hover td{background:#f8faf8}
 .lines-table select{font-size:13px;padding:6px 4px}
 .msg{position:fixed;bottom:20px;right:20px;background:var(--accent-dark);color:#fff;padding:12px 20px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none;z-index:99}
 .msg.err{background:var(--danger)}
+.notice{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.notice .grow{flex:1;min-width:200px}
+#saveStamp{font-size:12px;opacity:.85;background:rgba(255,255,255,.15);padding:3px 10px;border-radius:12px}
+.help h3{color:var(--accent-dark);margin:20px 0 6px}
+.help p,.help li{font-size:14.5px;line-height:1.55}
+.help .ex{background:#f1f8e9;border-left:4px solid var(--accent);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0}
 #lockScreen{position:fixed;inset:0;background:linear-gradient(160deg,#1b5e20,#2e7d32);display:none;align-items:center;justify-content:center;z-index:100}
 #lockScreen .box{background:#fff;border-radius:12px;padding:30px 34px;width:340px;max-width:90vw;box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center}
 #lockScreen h2{margin:0 0 6px;color:var(--accent-dark)}
@@ -124,6 +130,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
 
 <header class="topbar no-print">
   <h1 id="appTitle">EDD ASBL — Comptabilité</h1>
+  <span id="saveStamp" title="Chaque action est enregistrée immédiatement"></span>
   <div class="spacer"></div>
   <label>Exercice&nbsp;
     <select id="yearSelect" onchange="App.setYear(this.value)"></select>
@@ -132,14 +139,16 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
 
 <nav class="tabs no-print">
   <button data-tab="dashboard" class="active" onclick="App.showTab('dashboard')">Tableau de bord</button>
-  <button data-tab="encode" onclick="App.showTab('encode')">Encodage</button>
-  <button data-tab="journal" onclick="App.showTab('journal')">Écritures</button>
+  <button data-tab="encode" onclick="App.showTab('encode')">Encoder</button>
+  <button data-tab="journal" onclick="App.showTab('journal')">Opérations</button>
   <button data-tab="accounts" onclick="App.showTab('accounts')">Plan comptable</button>
   <button data-tab="reports" onclick="App.showTab('reports')">Rapports &amp; Comptes annuels</button>
+  <button data-tab="help" onclick="App.showTab('help')">❓ Aide</button>
   <button data-tab="settings" onclick="App.showTab('settings')">Paramètres</button>
 </nav>
 
 <main>
+<div id="notices" class="no-print"></div>
 
 <!-- ════════ TABLEAU DE BORD ════════ -->
 <section id="tab-dashboard" class="tab-pane active">
@@ -155,30 +164,35 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
   <div class="grid cols-2">
     <div class="card">
       <h2>Opération simple (recette / dépense)</h2>
-      <p class="muted">Pour encoder rapidement un paiement ou un encaissement via la banque ou la caisse. L'écriture en partie double est générée automatiquement.</p>
+      <p class="muted">C'est ici que vous encodez 95 % des opérations : un achat payé par la banque ou la caisse, une subvention reçue, un don, une cotisation… La comptabilité en partie double est générée automatiquement, vous n'avez rien d'autre à faire.</p>
       <div class="row">
-        <div><label class="fld">Type</label>
+        <div><label class="fld">Type d'opération</label>
           <select id="sType">
-            <option value="dep">Dépense (charge)</option>
-            <option value="rec">Recette (produit)</option>
+            <option value="dep">Dépense — de l'argent sort</option>
+            <option value="rec">Recette — de l'argent rentre</option>
           </select></div>
-        <div><label class="fld">Moyen de paiement</label>
+        <div><label class="fld">Par banque ou en liquide ?</label>
           <select id="sMode"></select></div>
       </div>
       <div class="row" style="margin-top:10px">
         <div><label class="fld">Date</label><input type="date" id="sDate"></div>
         <div><label class="fld">Montant (€)</label><input type="number" id="sAmount" step="0.01" min="0" placeholder="0,00"></div>
       </div>
-      <div style="margin-top:10px"><label class="fld">Compte de charge / produit</label>
-        <select id="sAccount"></select></div>
-      <div style="margin-top:10px"><label class="fld">Description</label>
+      <div style="margin-top:10px"><label class="fld">Catégorie — de quoi s'agit-il ?</label>
+        <select id="sAccount"></select>
+        <div class="muted" style="margin-top:3px">Choisissez la catégorie qui décrit le mieux l'opération. Vous pourrez toujours la corriger plus tard.</div></div>
+      <div style="margin-top:10px"><label class="fld">Description (pour vous y retrouver)</label>
         <input type="text" id="sComment" placeholder="Ex : fournitures goûters Colruyt"></div>
-      <div style="margin-top:14px"><button class="btn" onclick="App.saveSimple()">Enregistrer l'opération</button></div>
+      <div style="margin-top:14px">
+        <button class="btn" id="sSaveBtn" onclick="App.saveSimple()">Enregistrer l'opération</button>
+        <button class="btn secondary" id="sCancelBtn" style="display:none" onclick="App.resetSimpleForm()">Annuler la modification</button>
+        <input type="hidden" id="sEditId">
+      </div>
     </div>
 
     <div class="card">
       <h2>Écriture comptable (avancée)</h2>
-      <p class="muted">Écriture multi-lignes en partie double : salaires, opérations diverses, amortissements, ouverture d'exercice…</p>
+      <p class="muted">Réservé aux écritures complexes : salaires, amortissements, ouverture d'exercice… Si vous débutez, utilisez plutôt l'« Opération simple » à gauche.</p>
       <div class="row">
         <div><label class="fld">Journal</label><select id="eJournal"></select></div>
         <div><label class="fld">Date</label><input type="date" id="eDate"></div>
@@ -246,6 +260,69 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
   <div class="card"><div id="reportContent"><p class="muted">Choisissez un rapport ci-dessus.</p></div></div>
 </section>
 
+<!-- ════════ AIDE ════════ -->
+<section id="tab-help" class="tab-pane">
+  <div class="card help">
+    <h2>Guide pour bien démarrer (aucune connaissance en comptabilité requise)</h2>
+
+    <h3>1. Comment encoder une dépense ou une recette ?</h3>
+    <p>Allez dans l'onglet <b>Encoder</b>, cadre « Opération simple » :</p>
+    <ol>
+      <li>Choisissez <b>Dépense</b> (de l'argent sort) ou <b>Recette</b> (de l'argent rentre).</li>
+      <li>Indiquez si c'est passé par la <b>banque</b> ou par la <b>caisse</b> (argent liquide).</li>
+      <li>Encodez la date et le montant.</li>
+      <li>Choisissez la <b>catégorie</b> qui décrit le mieux l'opération.</li>
+      <li>Ajoutez une petite description et cliquez sur <b>Enregistrer</b>. C'est tout !</li>
+    </ol>
+    <div class="ex">💡 <b>Exemples :</b> vous achetez des collations pour 23,50 € avec la carte de l'ASBL → Dépense, Banque, catégorie « Fournitures pour goûters ».<br>
+    La commune verse un subside de 990 € → Recette, Banque, catégorie « Subventions communales ».<br>
+    Un parent paie 15 € en liquide pour l'école des devoirs → Recette, Caisse, catégorie « Recettes école des devoirs ».</div>
+
+    <h3>2. Je me suis trompé·e, comment corriger ?</h3>
+    <p>Tout est modifiable, rien n'est définitif :</p>
+    <ul>
+      <li>Allez dans l'onglet <b>Opérations</b> (ou le tableau de bord).</li>
+      <li>Cliquez sur <b>✎ Modifier</b> à côté de l'opération : elle se rouvre dans le formulaire d'encodage, corrigez et réenregistrez.</li>
+      <li>Cliquez sur <b>✕</b> pour la supprimer complètement (une confirmation est demandée).</li>
+      <li>En cas de grosse erreur, vous pouvez aussi revenir à une <b>version précédente</b> dans l'onglet <i>Paramètres</i> : le programme garde automatiquement les 15 derniers états de la comptabilité.</li>
+    </ul>
+
+    <h3>3. Mes données sont-elles enregistrées ?</h3>
+    <p>Oui, <b>chaque action est enregistrée immédiatement et automatiquement</b> — il n'y a pas de bouton « sauvegarder » à ne pas oublier. L'indicateur 💾 en haut de l'écran vous le confirme après chaque modification.</p>
+    <p>Trois protections supplémentaires contre la perte de données :</p>
+    <ul>
+      <li><b>Versions précédentes</b> : les 15 derniers états sont conservés (onglet <i>Paramètres</i>).</li>
+      <li><b>Sauvegarde automatique dans un fichier</b> : activez-la dans <i>Paramètres</i> pour qu'un fichier de votre ordinateur soit mis à jour à chaque modification (recommandé !).</li>
+      <li><b>Sauvegarde manuelle</b> : téléchargez de temps en temps le fichier JSON et gardez-le sur une clé USB ou dans le cloud. Un rappel s'affiche si vous ne l'avez pas fait depuis 14 jours.</li>
+    </ul>
+
+    <h3>4. C'est quoi, les « comptes » et le « plan comptable » ?</h3>
+    <p>Ce sont simplement les <b>catégories officielles</b> de la comptabilité belge (PCMN). Retenez juste :</p>
+    <ul>
+      <li>Les comptes qui commencent par <b>6</b> = les dépenses (charges).</li>
+      <li>Les comptes qui commencent par <b>7</b> = les recettes (produits).</li>
+      <li>Les autres (banque, caisse, dettes…) sont gérés automatiquement par le programme.</li>
+    </ul>
+    <p>Vous pouvez ajouter vos propres catégories dans l'onglet <i>Plan comptable</i>.</p>
+
+    <h3>5. Que faire en fin d'année ?</h3>
+    <ol>
+      <li>Vérifiez que toutes les opérations de l'année sont encodées.</li>
+      <li>Allez dans <b>Rapports &amp; Comptes annuels</b> → « Comptes annuels (fiche complète) » → <b>Imprimer / Exporter en PDF</b>. Vous obtenez le même document que celui d'une fiduciaire.</li>
+      <li>Dans <i>Paramètres</i>, cliquez sur <b>Générer l'ouverture de l'exercice suivant</b> : les soldes (banque, caisse…) sont reportés automatiquement sur la nouvelle année.</li>
+    </ol>
+
+    <h3>6. Petit lexique</h3>
+    <ul>
+      <li><b>Exercice</b> : l'année comptable (du 1er janvier au 31 décembre). Se choisit en haut à droite.</li>
+      <li><b>Écriture / opération</b> : une ligne de comptabilité (un achat, un subside reçu…).</li>
+      <li><b>Journal</b> : le « classeur » où l'opération est rangée : BAN (banque), CAI (caisse), ODV (opérations diverses), ODR (ouverture d'année).</li>
+      <li><b>Débit / crédit</b> : les deux colonnes de la comptabilité en partie double. Avec l'opération simple, le programme s'en occupe pour vous.</li>
+      <li><b>Bilan</b> : la photo du patrimoine de l'ASBL au 31 décembre. <b>Compte de résultats</b> : le film des recettes et dépenses de l'année.</li>
+    </ul>
+  </div>
+</section>
+
 <!-- ════════ PARAMÈTRES ════════ -->
 <section id="tab-settings" class="tab-pane">
   <div class="grid cols-2">
@@ -260,13 +337,23 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
     </div>
     <div class="card">
       <h2>Sauvegarde des données</h2>
-      <p class="muted">Les données sont stockées localement dans ce navigateur. Faites régulièrement une sauvegarde dans un fichier.</p>
+      <p class="muted">Chaque action est déjà <b>enregistrée automatiquement</b> dans ce navigateur (indicateur 💾 en haut). Les options ci-dessous ajoutent des copies de sécurité.</p>
+      <h3>Sauvegarde automatique dans un fichier (recommandé)</h3>
+      <p class="muted" id="autoFileStatus"></p>
       <div class="toolbar">
-        <button class="btn" onclick="App.backup()">⬇️ Sauvegarder (fichier JSON)</button>
+        <button class="btn" id="autoFileOnBtn" onclick="App.enableAutoFile()">📁 Activer la sauvegarde automatique</button>
+        <button class="btn secondary" id="autoFileOffBtn" style="display:none" onclick="App.disableAutoFile()">Désactiver</button>
+      </div>
+      <h3>Sauvegarde manuelle</h3>
+      <div class="toolbar">
+        <button class="btn" onclick="App.backup()">⬇️ Télécharger une sauvegarde (JSON)</button>
         <button class="btn secondary" onclick="document.getElementById('restoreFile').click()">⬆️ Restaurer une sauvegarde</button>
         <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="App.restore(this)">
       </div>
-      <p class="muted">⚠ Le fichier de sauvegarde n'est pas chiffré : conservez-le en lieu sûr. Il permet de récupérer les données en cas d'oubli du mot de passe.</p>
+      <p class="muted">⚠ Les fichiers de sauvegarde ne sont pas chiffrés : conservez-les en lieu sûr. Ils permettent de récupérer les données en cas d'oubli du mot de passe.</p>
+      <h3>Versions précédentes</h3>
+      <p class="muted">Le programme conserve automatiquement les 15 derniers états de la comptabilité. En cas d'erreur, revenez en arrière :</p>
+      <div id="snapshotList"></div>
       <h2 style="margin-top:24px">Mot de passe</h2>
       <p class="muted" id="pwdStatus"></p>
       <div class="row">
@@ -298,6 +385,44 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
    ══════════════════════════════════════════════════════════════ */
 
 const STORE_KEY = "edd-compta-v1";
+const SNAP_KEY  = "edd-compta-snapshots";
+const EXPORT_KEY = "edd-compta-lastexport";
+
+/* ---------- IndexedDB minimal (pour mémoriser le fichier de sauvegarde auto) ---------- */
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open("edd-compta-fs", 1);
+    r.onupgradeneeded = ()=>r.result.createObjectStore("kv");
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+async function idbGet(key){
+  try{ const db = await idbOpen();
+    return await new Promise(res=>{
+      const g = db.transaction("kv","readonly").objectStore("kv").get(key);
+      g.onsuccess = ()=>res(g.result); g.onerror = ()=>res(null);
+    });
+  }catch(e){ return null; }
+}
+async function idbSet(key,val){
+  try{ const db = await idbOpen();
+    await new Promise(res=>{
+      const tx = db.transaction("kv","readwrite");
+      tx.objectStore("kv").put(val,key);
+      tx.oncomplete = res; tx.onerror = res;
+    });
+  }catch(e){}
+}
+async function idbDel(key){
+  try{ const db = await idbOpen();
+    await new Promise(res=>{
+      const tx = db.transaction("kv","readwrite");
+      tx.objectStore("kv").delete(key);
+      tx.oncomplete = res; tx.onerror = res;
+    });
+  }catch(e){}
+}
 
 const JOURNALS = [
   {code:"BAN", label:"Banque"},
@@ -404,15 +529,34 @@ function loadPlain(obj){
   if(!DB.entries) DB.entries = [];
 }
 let _saving = Promise.resolve();
+let autoHandle = null;          // FileSystemFileHandle pour la sauvegarde auto
+function pushSnapshot(raw){
+  try{
+    const snaps = JSON.parse(localStorage.getItem(SNAP_KEY)||"[]");
+    snaps.push({t:Date.now(), raw});
+    while(snaps.length>15) snaps.shift();
+    localStorage.setItem(SNAP_KEY, JSON.stringify(snaps));
+  }catch(e){}
+}
+function stampSaved(){
+  const el = document.getElementById("saveStamp");
+  if(el) el.textContent = "💾 Enregistré à " +
+    new Date().toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
 function save(){
   _saving = _saving.then(async ()=>{
+    let raw;
     if(cryptoKey){
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const data = await crypto.subtle.encrypt({name:"AES-GCM", iv}, cryptoKey, txtEnc.encode(JSON.stringify(DB)));
-      localStorage.setItem(STORE_KEY, JSON.stringify({__enc:1, salt:b64(passSalt), iv:b64(iv), data:b64(data)}));
+      raw = JSON.stringify({__enc:1, salt:b64(passSalt), iv:b64(iv), data:b64(data)});
     } else {
-      localStorage.setItem(STORE_KEY, JSON.stringify(DB));
+      raw = JSON.stringify(DB);
     }
+    localStorage.setItem(STORE_KEY, raw);
+    pushSnapshot(raw);
+    stampSaved();
+    if(autoHandle) await App.writeAutoFile();
   }).catch(e=>toast("Erreur d'enregistrement : "+e.message, true));
   return _saving;
 }
@@ -527,6 +671,119 @@ const App = {
     this.resetSimpleForm();
     this.updatePwdStatus();
     this.renderAll();
+    // demander au navigateur de ne jamais purger les données locales
+    try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}
+    this.initAutoFile();
+  },
+
+  /* ----- sauvegarde automatique dans un fichier (File System Access API) ----- */
+  async initAutoFile(){
+    if(typeof indexedDB==="undefined" || !window.showSaveFilePicker) { this.updateAutoFileStatus(); return; }
+    const h = await idbGet("autoFile");
+    if(h){
+      try{
+        const p = await h.queryPermission({mode:"readwrite"});
+        if(p==="granted"){ autoHandle = h; }
+        else { this._pendingHandle = h; this._fsNeedsPerm = true; }
+      }catch(e){}
+    }
+    this.updateAutoFileStatus();
+    this.renderNotices();
+  },
+  async enableAutoFile(){
+    if(!window.showSaveFilePicker)
+      return toast("Votre navigateur ne permet pas la sauvegarde automatique dans un fichier. Utilisez Chrome ou Edge, ou faites des sauvegardes manuelles.", true);
+    try{
+      const name = "compta_auto_" + (DB.settings.name||"asbl").replace(/\s+/g,"_") + ".json";
+      autoHandle = await window.showSaveFilePicker({suggestedName:name,
+        types:[{description:"Sauvegarde comptabilité", accept:{"application/json":[".json"]}}]});
+      await idbSet("autoFile", autoHandle);
+      this._fsNeedsPerm = false; this._pendingHandle = null;
+      await this.writeAutoFile();
+      this.updateAutoFileStatus(); this.renderNotices();
+      toast("Sauvegarde automatique activée : le fichier sera mis à jour à chaque modification ✔");
+    }catch(e){ /* sélection annulée */ }
+  },
+  async resumeAutoFile(){
+    const h = this._pendingHandle; if(!h) return;
+    try{
+      const p = await h.requestPermission({mode:"readwrite"});
+      if(p==="granted"){ autoHandle = h; this._fsNeedsPerm = false; this._pendingHandle = null; await this.writeAutoFile(); toast("Sauvegarde automatique réactivée ✔"); }
+    }catch(e){}
+    this.updateAutoFileStatus(); this.renderNotices();
+  },
+  async disableAutoFile(){
+    autoHandle = null; this._pendingHandle = null; this._fsNeedsPerm = false;
+    await idbDel("autoFile");
+    this.updateAutoFileStatus(); this.renderNotices();
+    toast("Sauvegarde automatique désactivée.");
+  },
+  async writeAutoFile(){
+    if(!autoHandle) return;
+    try{
+      const w = await autoHandle.createWritable();
+      await w.write(JSON.stringify(DB, null, 1));
+      await w.close();
+      localStorage.setItem(EXPORT_KEY, String(Date.now()));
+    }catch(e){
+      autoHandle = null; this._fsNeedsPerm = true;
+      this.updateAutoFileStatus(); this.renderNotices();
+    }
+  },
+  updateAutoFileStatus(){
+    const el = document.getElementById("autoFileStatus");
+    const onBtn = document.getElementById("autoFileOnBtn");
+    const offBtn = document.getElementById("autoFileOffBtn");
+    if(!window.showSaveFilePicker){
+      el.textContent = "Non disponible dans ce navigateur (fonctionne avec Chrome et Edge). Utilisez la sauvegarde manuelle ci-dessous.";
+      onBtn.style.display = "none"; offBtn.style.display = "none"; return;
+    }
+    if(autoHandle){
+      el.textContent = `✅ Active — le fichier « ${autoHandle.name} » est mis à jour à chaque modification.`;
+      onBtn.style.display = "none"; offBtn.style.display = "inline-block";
+    } else if(this._fsNeedsPerm){
+      el.textContent = "⏸ En attente de votre autorisation (bandeau jaune en haut de l'écran).";
+      onBtn.style.display = "inline-block"; offBtn.style.display = "inline-block";
+    } else {
+      el.textContent = "Inactive. Choisissez un fichier sur votre ordinateur (ou une clé USB) : il sera mis à jour automatiquement à chaque modification.";
+      onBtn.style.display = "inline-block"; offBtn.style.display = "none";
+    }
+  },
+  renderNotices(){
+    const parts = [];
+    if(this._fsNeedsPerm)
+      parts.push(`<div class="notice"><div class="grow">📁 Pour des raisons de sécurité, le navigateur demande votre accord pour reprendre la <b>sauvegarde automatique</b> dans le fichier.</div>
+        <button class="btn small" onclick="App.resumeAutoFile()">Réactiver</button></div>`);
+    const last = parseInt(localStorage.getItem(EXPORT_KEY)||"0",10);
+    if(DB && DB.entries.length && (Date.now()-last) > 14*86400000)
+      parts.push(`<div class="notice"><div class="grow">💾 Aucune copie de sécurité récente. Téléchargez une sauvegarde (ou activez la sauvegarde automatique dans Paramètres).</div>
+        <button class="btn small" onclick="App.backup()">Télécharger maintenant</button></div>`);
+    document.getElementById("notices").innerHTML = parts.join("");
+  },
+
+  /* ----- versions précédentes (filet de sécurité) ----- */
+  renderSnapshots(){
+    const el = document.getElementById("snapshotList");
+    if(!el) return;
+    let snaps = [];
+    try{ snaps = JSON.parse(localStorage.getItem(SNAP_KEY)||"[]"); }catch(e){}
+    if(!snaps.length){ el.innerHTML = `<p class="muted">Aucune version pour l'instant.</p>`; return; }
+    el.innerHTML = `<table class="data"><tbody>` + snaps.map((s,i)=>{
+      const d = new Date(s.t);
+      const when = d.toLocaleDateString("fr-BE") + " " + d.toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+      const cur = i===snaps.length-1 ? ` <span class="badge">état actuel</span>` : "";
+      return `<tr><td>Version du ${when}${cur}</td>
+        <td style="text-align:right">${i===snaps.length-1?"":`<button class="btn small secondary" onclick="App.restoreSnapshot(${i})">↩ Revenir à cette version</button>`}</td></tr>`;
+    }).reverse().join("") + `</tbody></table>`;
+  },
+  restoreSnapshot(i){
+    let snaps = [];
+    try{ snaps = JSON.parse(localStorage.getItem(SNAP_KEY)||"[]"); }catch(e){}
+    const s = snaps[i]; if(!s) return;
+    const d = new Date(s.t);
+    if(!confirm(`Revenir à la version du ${d.toLocaleDateString("fr-BE")} à ${d.toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit"})} ?\n\nLes modifications faites après ce moment seront annulées (l'état actuel reste disponible dans la liste des versions).`)) return;
+    localStorage.setItem(STORE_KEY, s.raw);
+    location.reload();
   },
   updatePwdStatus(){
     const on = !!cryptoKey;
@@ -578,6 +835,8 @@ const App = {
     this.renderDashboard();
     this.renderJournal();
     this.renderAccounts();
+    this.renderSnapshots();
+    this.renderNotices();
     document.getElementById("appTitle").textContent = (DB.settings.name||"ASBL") + " — Comptabilité";
   },
 
@@ -620,8 +879,11 @@ const App = {
       k("Banque + Caisse", r2(bank+cash));
     const last = entriesOfYear(curYear).slice(-8).reverse();
     document.getElementById("dashLast").innerHTML = last.length
-      ? this.entriesTable(last, false)
-      : `<p class="muted">Aucune écriture pour ${curYear}. Commencez par l'onglet « Encodage ».</p>`;
+      ? this.entriesTable(last, true)
+      : `<p class="muted">Aucune opération pour ${curYear}.<br><br>
+         <b>Pour démarrer :</b> ① complétez l'identité de l'ASBL dans <i>Paramètres</i>,
+         ② encodez vos dépenses et recettes dans <i>Encoder</i>,
+         ③ en cas de doute, consultez l'onglet <i>❓ Aide</i> — il explique tout, pas à pas, sans jargon.</p>`;
   },
 
   /* ----- encodage simple ----- */
@@ -629,6 +891,21 @@ const App = {
     document.getElementById("sDate").value = new Date().toISOString().slice(0,10);
     document.getElementById("sAmount").value = "";
     document.getElementById("sComment").value = "";
+    document.getElementById("sEditId").value = "";
+    document.getElementById("sSaveBtn").textContent = "Enregistrer l'opération";
+    document.getElementById("sCancelBtn").style.display = "none";
+  },
+  /* reconnaît une écriture encodable dans le formulaire simple :
+     2 lignes, un compte financier (banque/caisse) + un compte 6 ou 7 */
+  simpleInfo(e){
+    if(!e.lines || e.lines.length!==2) return null;
+    const fin = e.lines.find(l=>l.account==="550000"||l.account==="570000");
+    const oth = e.lines.find(l=>l.account!=="550000"&&l.account!=="570000");
+    if(!fin || !oth) return null;
+    const cls = oth.account[0];
+    if(cls==="6" && oth.debit>0 && fin.credit>0) return {type:"dep", fin:fin.account, acc:oth.account, amount:oth.debit};
+    if(cls==="7" && oth.credit>0 && fin.debit>0) return {type:"rec", fin:fin.account, acc:oth.account, amount:oth.credit};
+    return null;
   },
   saveSimple(){
     const type = document.getElementById("sType").value;
@@ -639,16 +916,28 @@ const App = {
     const comment = document.getElementById("sComment").value.trim();
     if(!date) return toast("Indiquez une date.", true);
     if(amount<=0) return toast("Indiquez un montant positif.", true);
-    if(!acc) return toast("Choisissez un compte.", true);
+    if(!acc) return toast("Choisissez une catégorie.", true);
     const journal = fin==="570000" ? "CAI" : "BAN";
     const year = parseInt(date.slice(0,4),10);
     const lines = type==="dep"
       ? [{account:acc, debit:amount, credit:0},{account:fin, debit:0, credit:amount}]
       : [{account:fin, debit:amount, credit:0},{account:acc, debit:0, credit:amount}];
-    DB.entries.push({id:crypto.randomUUID(), journal, piece:nextPiece(journal,year), date, comment, lines});
+    const editId = document.getElementById("sEditId").value;
+    if(editId){
+      const e = DB.entries.find(x=>x.id===editId);
+      if(e){
+        if(e.journal!==journal || e.date.slice(0,4)!==date.slice(0,4)){
+          e.journal = journal; e.piece = nextPiece(journal, year);
+        }
+        e.date = date; e.comment = comment; e.lines = lines;
+      }
+      toast("Opération corrigée ✔");
+    } else {
+      DB.entries.push({id:crypto.randomUUID(), journal, piece:nextPiece(journal,year), date, comment, lines});
+      toast("Opération enregistrée ✔");
+    }
     save();
     this.resetSimpleForm();
-    toast("Opération enregistrée ✔");
     this.renderAll();
   },
 
@@ -716,6 +1005,22 @@ const App = {
   editEntry(id){
     const e = DB.entries.find(x=>x.id===id);
     if(!e) return;
+    const si = this.simpleInfo(e);
+    if(si){
+      // opération simple → réouverture dans le formulaire facile
+      this.showTab("encode");
+      document.getElementById("sType").value = si.type;
+      this.fillSimpleAccounts();
+      document.getElementById("sMode").value = si.fin;
+      document.getElementById("sAccount").value = si.acc;
+      document.getElementById("sDate").value = e.date;
+      document.getElementById("sAmount").value = si.amount;
+      document.getElementById("sComment").value = e.comment||"";
+      document.getElementById("sEditId").value = e.id;
+      document.getElementById("sSaveBtn").textContent = "Enregistrer la correction";
+      document.getElementById("sCancelBtn").style.display = "inline-block";
+      return;
+    }
     this.showTab("encode");
     document.getElementById("eJournal").value = e.journal;
     document.getElementById("eDate").value = e.date;
@@ -751,8 +1056,8 @@ const App = {
           <td class="num debit">${l.debit?fmt(l.debit):""}</td>
           <td class="num creditc">${l.credit?fmt(l.credit):""}</td>
           ${withActions ? (i===0?`<td style="white-space:nowrap">
-              <button class="btn small secondary" onclick="App.editEntry('${e.id}')">✎</button>
-              <button class="btn small danger" onclick="App.deleteEntry('${e.id}')">✕</button></td>`:"<td></td>") : ""}
+              <button class="btn small secondary" title="Corriger cette opération" onclick="App.editEntry('${e.id}')">✎ Modifier</button>
+              <button class="btn small danger" title="Supprimer cette opération" onclick="App.deleteEntry('${e.id}')">✕</button></td>`:"<td></td>") : ""}
         </tr>`;
       });
     });
@@ -842,6 +1147,8 @@ const App = {
   backup(){
     this.download(`sauvegarde_compta_${DB.settings.name.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.json`,
       JSON.stringify(DB,null,1), "application/json");
+    localStorage.setItem(EXPORT_KEY, String(Date.now()));
+    this.renderNotices();
   },
   restore(input){
     const f = input.files[0]; if(!f) return;
@@ -849,6 +1156,13 @@ const App = {
     r.onload = ()=>{
       try{
         const data = JSON.parse(r.result);
+        if(data.__enc===1){
+          if(confirm("Cette sauvegarde est protégée par un mot de passe. La charger ? (le mot de passe sera demandé)")){
+            localStorage.setItem(STORE_KEY, r.result);
+            location.reload();
+          }
+          input.value=""; return;
+        }
         if(!data.accounts || !data.entries) throw new Error("format");
         if(!confirm("Remplacer toutes les données actuelles par cette sauvegarde ?")) return;
         DB = data; save();
