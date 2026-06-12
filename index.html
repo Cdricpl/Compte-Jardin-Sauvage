@@ -181,7 +181,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
       </div>
       <div style="margin-top:10px" id="sAccountWrap"><label class="fld">Catégorie — de quoi s'agit-il ?</label>
         <select id="sAccount" onchange="App.onSimpleAccountChange(this)"></select>
-        <div class="muted" style="margin-top:3px">Tout le plan comptable est listé : les catégories courantes d'abord, puis les autres comptes (« Autres · » : paiement de l'ONSS, du précompte, d'un fournisseur, achat de matériel durable…). Il en manque une ? Choisissez « ➕ Créer une nouvelle catégorie » en bas de la liste.</div></div>
+        <div class="muted" style="margin-top:3px">Tout le plan comptable est listé en ordre croissant (1 → 7), groupé par famille. Les dépenses courantes commencent par 6, les recettes par 7. Il manque une catégorie ? Choisissez « ➕ Créer une nouvelle catégorie » en bas de la liste.</div></div>
       <div style="margin-top:10px"><label class="fld">Description (pour vous y retrouver)</label>
         <input type="text" id="sComment" placeholder="Ex : fournitures goûters Colruyt"></div>
       <div style="margin-top:14px">
@@ -278,7 +278,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
     <div class="ex">💡 <b>Exemples :</b> vous achetez des collations pour 23,50 € avec la carte de l'ASBL → Dépense, Banque, catégorie « Fournitures pour goûters ».<br>
     La commune verse un subside de 990 € → Recette, Banque, catégorie « Subventions communales ».<br>
     Un parent paie 15 € en liquide pour l'école des devoirs → Recette, Caisse, catégorie « Recettes école des devoirs ».</div>
-    <p>La liste des catégories est groupée par famille (fonctionnement, personnel, subsides…). Les catégories courantes apparaissent en premier ; en dessous, les groupes « Autres · » donnent accès à <b>tout le plan comptable</b> : payer l'ONSS ou le précompte professionnel (Dépense → « Autres · Dettes sociales et fiscales »), payer une facture fournisseur, acheter du matériel durable (→ « Autres · Mobilier et matériel »)… S'il manque une catégorie, choisissez <b>« ➕ Créer une nouvelle catégorie »</b> tout en bas de la liste : donnez-lui un nom, c'est tout. Pour retirer ou déposer du liquide, utilisez le type <b>« Virement entre banque et caisse »</b>.</p>
+    <p>La liste des catégories contient <b>tout le plan comptable en ordre croissant</b> (comptes 1 à 7), groupé par famille. Repère facile : les <b>dépenses courantes commencent par 6</b>, les <b>recettes par 7</b> — la liste s'y positionne d'ailleurs automatiquement selon le type choisi. Les autres comptes servent aux cas particuliers : payer l'ONSS ou le précompte (45…), une facture fournisseur (44…), acheter du matériel durable (24…). S'il manque une catégorie, choisissez <b>« ➕ Créer une nouvelle catégorie »</b> tout en bas de la liste : donnez-lui un nom, c'est tout. Pour retirer ou déposer du liquide, utilisez le type <b>« Virement entre banque et caisse »</b>.</p>
 
     <h3>2. Je me suis trompé·e, comment corriger ?</h3>
     <p>Tout est modifiable, rien n'est définitif :</p>
@@ -885,13 +885,13 @@ const App = {
       "75":"Produits financiers","76":"Produits exceptionnels"
     };
     const groupName = c => GROUPS[c.slice(0,2)] || ({"1":"Fonds et dettes long terme","2":"Investissements (immobilisations)","3":"Stocks","4":"Créances et dettes","5":"Placements et liquidités"}[c[0]]) || ("Comptes "+c.slice(0,2));
-    const buildGroups = (accs, prefix)=>{
+    const buildGroups = accs=>{
       let html = "", curGrp = null;
       accs.forEach(a=>{
         const g = groupName(a.code);
         if(g!==curGrp){
           if(curGrp!==null) html += `</optgroup>`;
-          html += `<optgroup label="${esc(prefix+g)}">`;
+          html += `<optgroup label="${esc(g)}">`;
           curGrp = g;
         }
         html += `<option value="${a.code}">${a.code} — ${esc(a.label)}</option>`;
@@ -899,15 +899,15 @@ const App = {
       if(curGrp!==null) html += `</optgroup>`;
       return html;
     };
-    const cls = type==="dep" ? "6" : "7";
-    // banque et caisse sont gérées par « Par banque ou en liquide ? » et le virement
+    // tous les comptes en ordre croissant ; banque et caisse sont gérées
+    // par « Par banque ou en liquide ? » et par le virement
     const all = accountsSorted().filter(a=>a.code!=="550000" && a.code!=="570000");
-    const main = all.filter(a=>a.code[0]===cls);          // catégories courantes d'abord
-    const others = all.filter(a=>a.code[0]!==cls);        // puis tous les autres comptes
     document.getElementById("sAccount").innerHTML =
-      buildGroups(main, "") +
-      buildGroups(others, "Autres · ") +
+      buildGroups(all) +
       `<optgroup label="────────────"><option value="__new__">➕ Créer une nouvelle catégorie…</option></optgroup>`;
+    // présélectionner la zone la plus utile : charges pour une dépense, produits pour une recette
+    const first = all.find(a=>a.code[0]===(type==="dep"?"6":"7"));
+    if(first) document.getElementById("sAccount").value = first.code;
   },
   onSimpleAccountChange(sel){
     if(sel.value!=="__new__") return;
