@@ -20,14 +20,19 @@ const Reports = {
     const bigline  = (lbl,v)    => rows.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">${esc(lbl)}</td><td class="c1"></td><td class="c2"></td><td class="c3">${fmt(v)}</td></tr>`);
     const blank    = ()         => rows.push(`<tr><td colspan="4">&nbsp;</td></tr>`);
 
+    // Comptes 6/7 déjà repris : garantit que le résultat du CR == resultOfYear
+    // (sinon un compte ajouté en 71/72/77 ou 67/68/69 fausserait le résultat).
+    const seen = new Set();
+    const mark = arr => { arr.forEach(a=>seen.add(a.code)); return arr; };
+
     rows.push(`<tr><td colspan="4" class="rp-section">PRODUITS ET CHARGES D'EXPLOITATION</td></tr>`);
 
-    const p70 = accountsIn(bal, c=>c.startsWith("70")).filter(a=>a.mv);
+    const p70 = mark(accountsIn(bal, c=>c.startsWith("70")).filter(a=>a.mv));
     p70.forEach(a=>line(a.label, r2(-a.s), 2));
     const t70 = sum(p70, a=>r2(-a.s));
     if(p70.length) subtotal(t70);
 
-    const p73 = accountsIn(bal, c=>c.startsWith("73")||c.startsWith("74")).filter(a=>a.mv);
+    const p73 = mark(accountsIn(bal, c=>/^7[1-4]/.test(c)).filter(a=>a.mv));
     p73.forEach(a=>line(a.label, r2(-a.s), 2));
     const t73 = sum(p73, a=>r2(-a.s));
     if(p73.length) subtotal(t73);
@@ -37,7 +42,7 @@ const Reports = {
     blank();
 
     const grp = (pred, lbl)=>{
-      const accs = accountsIn(bal,pred).filter(a=>a.mv);
+      const accs = mark(accountsIn(bal,pred).filter(a=>a.mv));
       const tot  = sum(accs, a=>a.s);
       if(accs.length){
         line(lbl, r2(-tot), 2);
@@ -56,16 +61,16 @@ const Reports = {
     blank();
 
     rows.push(`<tr><td colspan="4" class="rp-section">PRODUITS ET CHARGES FINANCIERES</td></tr>`);
-    const p75 = accountsIn(bal,c=>c.startsWith("75")).filter(a=>a.mv);
+    const p75 = mark(accountsIn(bal,c=>c.startsWith("75")).filter(a=>a.mv));
     p75.forEach(a=>line(a.label, r2(-a.s), 2));
-    const c65 = accountsIn(bal,c=>c.startsWith("65")).filter(a=>a.mv);
+    const c65 = mark(accountsIn(bal,c=>c.startsWith("65")).filter(a=>a.mv));
     c65.forEach(a=>line(a.label, r2(-a.s), 2));
     const tFin = r2(sum(p75,a=>r2(-a.s)) - sum(c65,a=>a.s));
     subtotal(tFin);
     let res = r2(resExp + tFin);
 
-    const p76 = accountsIn(bal,c=>c.startsWith("76")).filter(a=>a.mv);
-    const c66 = accountsIn(bal,c=>c.startsWith("66")).filter(a=>a.mv);
+    const p76 = mark(accountsIn(bal,c=>c.startsWith("76")||c.startsWith("77")).filter(a=>a.mv));
+    const c66 = mark(accountsIn(bal,c=>c.startsWith("66")).filter(a=>a.mv));
     if(p76.length||c66.length){
       blank();
       rows.push(`<tr><td colspan="4" class="rp-section">PRODUITS ET CHARGES EXCEPTIONNELS</td></tr>`);
@@ -74,6 +79,20 @@ const Reports = {
       const tExc = r2(sum(p76,a=>r2(-a.s)) - sum(c66,a=>a.s));
       subtotal(tExc);
       res = r2(res + tExc);
+    }
+
+    // Filet de sécurité : tout produit (7) / charge (6) non repris ci-dessus,
+    // pour que le résultat affiché égale toujours celui du bilan (resultOfYear).
+    const autresP = accountsIn(bal, c=>c[0]==="7").filter(a=>a.mv && !seen.has(a.code));
+    const autresC = accountsIn(bal, c=>c[0]==="6").filter(a=>a.mv && !seen.has(a.code));
+    if(autresP.length||autresC.length){
+      blank();
+      rows.push(`<tr><td colspan="4" class="rp-section">AUTRES PRODUITS ET CHARGES</td></tr>`);
+      autresP.forEach(a=>line(a.label, r2(-a.s), 2));
+      autresC.forEach(a=>line(a.label, r2(-a.s), 2));
+      const tAutres = r2(sum(autresP,a=>r2(-a.s)) - sum(autresC,a=>a.s));
+      subtotal(tAutres);
+      res = r2(res + tAutres);
     }
     blank();
     bigline(res>=0?"BENEFICE DE L'EXERCICE A AFFECTER :":"PERTE DE L'EXERCICE A AFFECTER :", res);
@@ -99,6 +118,14 @@ const Reports = {
   htmlBilan(bal){
     const y   = curYear;
     const res = resultOfYear(bal);
+
+    // Un compte de classe 1-5 est « classé » s'il tombe dans une rubrique
+    // explicite ci-dessous. Tout compte NON classé est repris dans « Autres
+    // actifs/passifs » selon le signe de son solde → le total des deux côtés
+    // capte toujours 100 % des soldes, donc le bilan reste toujours équilibré.
+    const classified = c =>
+      /^[235]/.test(c) || /^4[0-8]/.test(c) || /^49[0-3]/.test(c) ||
+      /^1[0-35]/.test(c) || /^1[67]/.test(c) || c==="140000";
 
     /* ACTIF */
     const a = [];
@@ -140,6 +167,14 @@ const Reports = {
       let t=0; regA.forEach(x=>{ aline(x.label, x.s, 2); t=r2(t+x.s); });
       asub(t); totA = r2(totA+t);
     }
+    // Filet de sécurité : tout compte d'actif (classe 1-5, solde débiteur)
+    // non classé ci-dessus, pour qu'aucun montant ne disparaisse du total.
+    const autreA = accountsIn(bal, c=>/^[1-5]/.test(c)).filter(x=>x.s>0 && !classified(x.code));
+    if(autreA.length){
+      asec("AUTRES ACTIFS");
+      let t=0; autreA.forEach(x=>{ aline(x.label, x.s, 2); t=r2(t+x.s); });
+      asub(t); totA = r2(totA+t);
+    }
     a.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">TOTAL DE L'ACTIF :</td><td class="c1"></td><td class="c2"></td><td class="c3" style="border-top:3px double #000">${fmt(totA)}</td></tr>`);
 
     /* PASSIF */
@@ -153,7 +188,7 @@ const Reports = {
     psec("FONDS DE L'ASSOCIATION");
     let tF=0;
     fonds.forEach(x=>{ pline(x.label, r2(-x.s), 3); tF=r2(tF-x.s); });
-    const reporteFinal = r2(-solde(bal,"140000") + res);
+    const reporteFinal = r2(-solde(bal,"140000") + res);  // 140000 traité ici (classé)
     psec(reporteFinal>=0 ? "BENEFICE REPORTE" : "PERTE REPORTEE");
     pline(reporteFinal>=0 ? "Bénéfice reporté" : "Perte reportée", reporteFinal, 3);
     const capProp = r2(tF + reporteFinal);
@@ -171,11 +206,19 @@ const Reports = {
       let t=0; dCT.forEach(x=>{ pline(x.label, r2(-x.s), 2); t=r2(t-x.s); });
       psub(t); totP=r2(totP+t);
     }
-    const regP = accountsIn(bal, c=>c==="492000").filter(x=>x.s!==0);
+    const regP = accountsIn(bal, c=>c==="492000"||c==="493000").filter(x=>x.s!==0);
     if(regP.length){
       psec("COMPTES DE REGULARISATION");
       let t=0; regP.forEach(x=>{ pline(x.label, r2(-x.s), 3); t=r2(t-x.s); });
-      totP=r2(totP+t);
+      psub(t); totP=r2(totP+t);
+    }
+    // Filet de sécurité : tout compte de passif (classe 1-5, solde créditeur)
+    // non classé ci-dessus, pour qu'aucun montant ne disparaisse du total.
+    const autreP = accountsIn(bal, c=>/^[1-5]/.test(c)).filter(x=>x.s<0 && !classified(x.code));
+    if(autreP.length){
+      psec("AUTRES PASSIFS");
+      let t=0; autreP.forEach(x=>{ pline(x.label, r2(-x.s), 3); t=r2(t-x.s); });
+      psub(t); totP=r2(totP+t);
     }
     p.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">TOTAL DU PASSIF :</td><td class="c1"></td><td class="c2"></td><td class="c3" style="border-top:3px double #000">${fmt(totP)}</td></tr>`);
 
@@ -215,6 +258,7 @@ const Reports = {
     block(c=>c.startsWith("64"), "Autres charges d'exploitation");
     block(c=>c.startsWith("65"), "Charges financières");
     block(c=>c.startsWith("66"), "Charges exceptionnelles");
+    block(c=>/^6[789]/.test(c), "Autres charges");
     return `<div class="rp-page">${this.rpHead()}
       <div class="rp-title">DETAIL DES CHARGES D'EXPLOITATION AU 31.12.${y}</div>
       <table class="rp"><colgroup><col style="width:60%"><col style="width:20%"><col style="width:20%"></colgroup>${rows.join("")}</table></div>`;

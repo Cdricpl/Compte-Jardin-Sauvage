@@ -710,7 +710,7 @@ const App = {
     toast("Données effacées.");
   },
 
-  closeYear(){
+  async closeYear(){
     const y = curYear, ny = y+1;
     const exists = DB.entries.some(e=>e.journal==="ODR" && e.date===`${ny}-01-01`);
     if(exists && !confirm(`Une écriture d'ouverture existe déjà au 01-01-${ny}. En créer une nouvelle quand même ?`)) return;
@@ -730,7 +730,7 @@ const App = {
       id: crypto.randomUUID(), journal:"ODR", piece: nextPiece("ODR", ny),
       date:`${ny}-01-01`, comment:`Ouverture automatique (report ${y})`, lines
     });
-    save();
+    await save();
     toast(`Écriture d'ouverture ${ny} créée (${lines.length} lignes) ✔`);
     curYear = ny;
     this.renderAll();
