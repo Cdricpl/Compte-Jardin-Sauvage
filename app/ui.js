@@ -16,6 +16,7 @@ const App = {
       }
     }
     if(raw && raw.__enc===1){
+      hideBoot();
       this._encBlob = raw;
       document.getElementById("lockScreen").style.display = "flex";
       document.getElementById("lockPwd").focus();
@@ -47,6 +48,7 @@ const App = {
   },
 
   start(){
+    hideBoot();
     this.refreshYears();
     this.fillSelectors();
     this.applySettingsToUI();
@@ -772,10 +774,17 @@ const App = {
   },
 };
 
+/* Retire le panneau de diagnostic de démarrage (statique dans le HTML). */
+function hideBoot(){
+  const b = document.getElementById("bootDiag");
+  if(b) b.remove();
+}
+
 /* Garde-fou : toute erreur au démarrage doit être VISIBLE, jamais un écran vide.
    Le message est mémorisé pour survivre aux réaffichages de renderNotices(). */
 let fatalMsg = null;
 function showFatal(msg){
+  hideBoot();
   fatalMsg = msg;
   const el = document.getElementById("notices");
   if(el) el.innerHTML = fatalHTML() + el.innerHTML;

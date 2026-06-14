@@ -20,7 +20,10 @@ const outDir = path.join(root, "dist");
 
 const ORDER = ["config.js", "storage.js", "accounting.js", "reports.js", "ui.js"];
 
-let html = fs.readFileSync(path.join(appDir, "index.html"), "utf8");
+const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
+
+let html = fs.readFileSync(path.join(appDir, "index.html"), "utf8")
+  .replace(/__APP_VERSION__/g, version);
 
 // Concatène les 5 scripts ; neutralise toute éventuelle séquence </script>
 // présente dans une chaîne/commentaire pour ne pas casser la balise inline.

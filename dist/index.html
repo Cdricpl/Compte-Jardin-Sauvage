@@ -116,6 +116,16 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
 </head>
 <body>
 
+<!-- Diagnostic de démarrage : reste affiché si le code ne se lance pas.
+     Retiré dès que l'application démarre (App.start), affiche le verrou,
+     ou en cas d'erreur (showFatal). S'il reste visible = le JavaScript ne
+     s'est pas exécuté du tout. -->
+<div id="bootDiag" style="position:fixed;inset:0;background:#fff;color:#1d2733;font-family:'Segoe UI',system-ui,Arial,sans-serif;padding:40px 28px;z-index:99999">
+  <h2 style="color:#1b5e20;margin:0 0 6px">EDD Compta <span style="color:#6b7a8c;font-weight:normal">v1.0.6</span></h2>
+  <p style="font-size:16px">Démarrage en cours…</p>
+  <p style="color:#6b7a8c;font-size:14px;max-width:560px">Si ce message reste affiché plus de quelques secondes, la page s'est ouverte mais le programme ne s'est pas lancé. Faites une capture d'écran de cet écran et envoyez-la — elle indique précisément l'origine du problème.</p>
+</div>
+
 <div id="lockScreen">
   <div class="box">
     <h2>🔒 Comptabilité protégée</h2>
@@ -129,6 +139,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
 <header class="topbar no-print">
   <h1 id="appTitle">EDD ASBL — Comptabilité</h1>
   <span id="saveStamp" title="Chaque action est enregistrée immédiatement"></span>
+  <span id="appVer" title="Version installée" style="font-size:11px;opacity:.7">v1.0.6</span>
   <div class="spacer"></div>
   <label>Exercice&nbsp;
     <select id="yearSelect" onchange="App.setYear(this.value)"></select>
@@ -1067,6 +1078,7 @@ const App = {
       }
     }
     if(raw && raw.__enc===1){
+      hideBoot();
       this._encBlob = raw;
       document.getElementById("lockScreen").style.display = "flex";
       document.getElementById("lockPwd").focus();
@@ -1098,6 +1110,7 @@ const App = {
   },
 
   start(){
+    hideBoot();
     this.refreshYears();
     this.fillSelectors();
     this.applySettingsToUI();
@@ -1823,10 +1836,17 @@ const App = {
   },
 };
 
+/* Retire le panneau de diagnostic de démarrage (statique dans le HTML). */
+function hideBoot(){
+  const b = document.getElementById("bootDiag");
+  if(b) b.remove();
+}
+
 /* Garde-fou : toute erreur au démarrage doit être VISIBLE, jamais un écran vide.
    Le message est mémorisé pour survivre aux réaffichages de renderNotices(). */
 let fatalMsg = null;
 function showFatal(msg){
+  hideBoot();
   fatalMsg = msg;
   const el = document.getElementById("notices");
   if(el) el.innerHTML = fatalHTML() + el.innerHTML;
