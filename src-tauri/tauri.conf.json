@@ -1,9 +1,10 @@
 {
   "productName": "EDD Compta",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "identifier": "be.asbl.edd.compta",
   "build": {
-    "frontendDist": "../app"
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "node scripts/bundle.js"
   },
   "app": {
     "withGlobalTauri": true,
