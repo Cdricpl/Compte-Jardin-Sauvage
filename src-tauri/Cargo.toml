@@ -1,6 +1,6 @@
 [package]
 name = "edd-compta"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 
 [lib]
@@ -12,8 +12,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 # pin time to avoid coherence conflict between tauri-utils 2.9.2 blanket From impls
 # and time 0.3.42+ stricter trait impls under Rust 1.90+
 time = { version = "=0.3.36", default-features = false }

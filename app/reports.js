@@ -116,6 +116,12 @@ const Reports = {
       a.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">TOTAL IMMOBILISATIONS NETTES :</td><td class="c1"></td><td class="c2"></td><td class="c3">${fmt(totImmo)}</td></tr>`);
       totA = r2(totA+totImmo);
     }
+    const stocks = accountsIn(bal, c=>/^3/.test(c)).filter(x=>x.s!==0);
+    if(stocks.length){
+      asec("STOCKS");
+      let t=0; stocks.forEach(x=>{ aline(x.label, x.s, 2); t=r2(t+x.s); });
+      asub(t); totA = r2(totA+t);
+    }
     const crea = accountsIn(bal, c=>/^4(0|1)/.test(c)).filter(x=>x.s!==0);
     if(crea.length){
       asec("CREANCES A UN AN AU PLUS");
@@ -143,7 +149,7 @@ const Reports = {
     const psec  = t            => p.push(`<tr><td colspan="4" class="rp-section">${t}</td></tr>`);
     let totP = 0;
 
-    const fonds = accountsIn(bal, c=>/^1[0-3]/.test(c)).filter(x=>x.s!==0);
+    const fonds = accountsIn(bal, c=>/^1[0-35]/.test(c)).filter(x=>x.s!==0);  // 10-13 fonds + 15 subsides en capital
     psec("FONDS DE L'ASSOCIATION");
     let tF=0;
     fonds.forEach(x=>{ pline(x.label, r2(-x.s), 3); tF=r2(tF-x.s); });
