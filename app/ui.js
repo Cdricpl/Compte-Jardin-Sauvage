@@ -5,10 +5,16 @@ const App = {
   /* ── Démarrage ── */
   async init(){
     let raw = null;
-    try{
-      const stored = await storageRead();
-      if(stored) raw = JSON.parse(stored);
-    }catch(e){}
+    const stored = await storageRead().catch(()=>null);
+    if(stored){
+      try{ raw = JSON.parse(stored); }
+      catch(e){
+        // Données illisibles : les préserver dans un instantané avant de
+        // repartir à vide, pour qu'un futur save() n'écrase rien d'irrécupérable.
+        await pushSnapshot(stored);
+        showFatal("Les données enregistrées sont illisibles. Une copie a été conservée dans « Versions précédentes » ; restaurez une sauvegarde JSON si nécessaire.");
+      }
+    }
     if(raw && raw.__enc===1){
       this._encBlob = raw;
       document.getElementById("lockScreen").style.display = "flex";
@@ -123,8 +129,15 @@ const App = {
     const onBtn  = document.getElementById("autoFileOnBtn");
     const offBtn = document.getElementById("autoFileOffBtn");
     if(isTauri){
-      el.textContent = "✅ Application de bureau — les données sont enregistrées automatiquement dans le dossier AppData de Windows.";
-      onBtn.style.display = "none"; offBtn.style.display = "none"; return;
+      el.textContent = "✅ Application de bureau — les données sont enregistrées automatiquement dans un fichier de l'ordinateur.";
+      onBtn.style.display = "none"; offBtn.style.display = "none";
+      if(this._dataDir===undefined){
+        this._dataDir = null;
+        invokeT("get_data_dir").then(p=>{ this._dataDir = p; this.updateAutoFileStatus(); }).catch(()=>{});
+      }
+      if(this._dataDir)
+        el.textContent = `✅ Application de bureau — les données sont enregistrées automatiquement dans : ${this._dataDir}`;
+      return;
     }
     if(!window.showSaveFilePicker){
       el.textContent = "Non disponible dans ce navigateur (fonctionne avec Chrome et Edge). Utilisez la sauvegarde manuelle ci-dessous.";
@@ -144,6 +157,7 @@ const App = {
 
   renderNotices(){
     const parts = [];
+    if(fatalMsg) parts.push(fatalHTML());
     if(tauriBroken)
       parts.push(`<div class="notice"><div class="grow">⚠ Le <b>stockage fichier de l'application</b> ne répond pas : les données sont enregistrées dans le stockage interne en attendant. Faites une <b>sauvegarde JSON</b> (Paramètres) par précaution.</div></div>`);
     if(!isTauri && this._fsNeedsPerm)
@@ -192,7 +206,8 @@ const App = {
     const el = document.getElementById("pwdStatus");
     el.textContent = on
       ? "🔒 Protection active : les données sont chiffrées (AES-256). Le mot de passe sera demandé à chaque ouverture."
-      : "🔓 Aucun mot de passe : les données sont lisibles par toute personne ayant accès à ce navigateur.";
+      : "🔓 Aucun mot de passe : les données sont lisibles par toute personne ayant accès à "
+        + (isTauri ? "cet ordinateur." : "ce navigateur.");
     document.getElementById("pwdRemoveBtn").style.display = on ? "inline-block" : "none";
   },
 
@@ -666,21 +681,22 @@ const App = {
     const f = input.files[0]; if(!f) return;
     const r = new FileReader();
     r.onload = ()=>{
+      input.value = "";   // toujours vider, même si l'utilisateur annule
       try{
         const data = JSON.parse(r.result);
         if(data.__enc===1){
           if(confirm("Cette sauvegarde est protégée par un mot de passe. La charger ? (le mot de passe sera demandé)")){
             storageWrite(r.result).then(()=>location.reload());
           }
-          input.value=""; return;
+          return;
         }
         if(!data.accounts || !data.entries) throw new Error("format");
         if(!confirm("Remplacer toutes les données actuelles par cette sauvegarde ?")) return;
-        DB = data; save();
+        loadPlain(data);   // complète settings/accounts/entries manquants
+        save();
         this.fillSelectors(); this.applySettingsToUI(); this.renderAll();
         toast("Sauvegarde restaurée ✔");
       }catch(e){ toast("Fichier de sauvegarde invalide.", true); }
-      input.value="";
     };
     r.readAsText(f);
   },
@@ -694,7 +710,7 @@ const App = {
     toast("Données effacées.");
   },
 
-  closeYear(){
+  async closeYear(){
     const y = curYear, ny = y+1;
     const exists = DB.entries.some(e=>e.journal==="ODR" && e.date===`${ny}-01-01`);
     if(exists && !confirm(`Une écriture d'ouverture existe déjà au 01-01-${ny}. En créer une nouvelle quand même ?`)) return;
@@ -714,7 +730,7 @@ const App = {
       id: crypto.randomUUID(), journal:"ODR", piece: nextPiece("ODR", ny),
       date:`${ny}-01-01`, comment:`Ouverture automatique (report ${y})`, lines
     });
-    save();
+    await save();
     toast(`Écriture d'ouverture ${ny} créée (${lines.length} lignes) ✔`);
     curYear = ny;
     this.renderAll();
@@ -756,11 +772,17 @@ const App = {
   },
 };
 
-/* Garde-fou : toute erreur au démarrage doit être VISIBLE, jamais un écran vide. */
+/* Garde-fou : toute erreur au démarrage doit être VISIBLE, jamais un écran vide.
+   Le message est mémorisé pour survivre aux réaffichages de renderNotices(). */
+let fatalMsg = null;
 function showFatal(msg){
+  fatalMsg = msg;
   const el = document.getElementById("notices");
-  if(el) el.innerHTML = `<div class="notice"><div class="grow">❌ <b>Erreur au démarrage :</b> ${esc(msg)}<br>
-    Réessayez de fermer/rouvrir l'application. Si le problème persiste, signalez ce message.</div></div>` + el.innerHTML;
+  if(el) el.innerHTML = fatalHTML() + el.innerHTML;
+}
+function fatalHTML(){
+  return fatalMsg ? `<div class="notice"><div class="grow">❌ <b>Erreur au démarrage :</b> ${esc(fatalMsg)}<br>
+    Réessayez de fermer/rouvrir l'application. Si le problème persiste, signalez ce message.</div></div>` : "";
 }
 window.addEventListener("error", e=>showFatal(e.message||"erreur inconnue"));
 
