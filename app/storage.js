@@ -1,8 +1,14 @@
 "use strict";
+try{(window.__L=window.__L||[]).push("storage-start");}catch(e){}
 
 /* ── Détection Tauri (desktop) vs navigateur ── */
-const isTauri = typeof window !== 'undefined' && typeof window.__TAURI__ !== 'undefined'
-             && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function';
+/* Tout est protégé : aucune ligne de ce fichier ne doit pouvoir avorter son
+   chargement (sinon DB/storageRead ne seraient pas définis et l'app planterait). */
+let isTauri = false;
+try {
+  isTauri = typeof window !== 'undefined' && typeof window.__TAURI__ !== 'undefined'
+         && !!window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function';
+} catch(e) { isTauri = false; }
 
 /* Si l'IPC Tauri ne répond pas (timeout/erreur), on bascule sur localStorage
    pour que l'application démarre TOUJOURS, avec un avertissement visible. */
@@ -88,7 +94,8 @@ async function idbDel(key){
 
 /* ── Chiffrement AES-256-GCM, clé dérivée par PBKDF2 ── */
 let cryptoKey = null, passSalt = null;
-const txtEnc = new TextEncoder(), txtDec = new TextDecoder();
+let txtEnc, txtDec;
+try { txtEnc = new TextEncoder(); txtDec = new TextDecoder(); } catch(e) {}
 const b64   = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = s   => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
 
@@ -101,7 +108,8 @@ async function deriveKey(pwd, salt){
 
 /* ── État de la base de données ── */
 let DB = null;
-let curYear = new Date().getFullYear();
+let curYear = 2026;
+try { curYear = new Date().getFullYear(); } catch(e) {}
 
 function defaultDB(){
   return {
