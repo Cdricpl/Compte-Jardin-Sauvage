@@ -33,7 +33,7 @@ const { window } = dom;
 
 // Injecter les 5 scripts dans l'ordre via de vraies balises <script>
 // (sémantique identique au navigateur : portée globale partagée)
-for (const f of ["config.js", "storage.js", "accounting.js", "reports.js", "ui.js"]) {
+for (const f of ["config.js", "eddstore.js", "accounting.js", "reports.js", "ui.js"]) {
   const code = fs.readFileSync(path.join(appDir, f), "utf8");
   const s = window.document.createElement("script");
   s.textContent = code;

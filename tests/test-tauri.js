@@ -29,7 +29,7 @@ function boot(mode){
       },
     });
     const { window } = dom;
-    for (const f of ["config.js","storage.js","accounting.js","reports.js","ui.js"]) {
+    for (const f of ["config.js","eddstore.js","accounting.js","reports.js","ui.js"]) {
       const s = window.document.createElement("script");
       s.textContent = fs.readFileSync(path.join(appDir, f), "utf8");
       window.document.body.appendChild(s);

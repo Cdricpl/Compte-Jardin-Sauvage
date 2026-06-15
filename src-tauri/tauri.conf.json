@@ -1,6 +1,6 @@
 {
   "productName": "EDD Compta",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "identifier": "be.asbl.edd.compta",
   "build": {
     "frontendDist": "../app"
