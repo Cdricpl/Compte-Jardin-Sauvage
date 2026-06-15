@@ -130,9 +130,9 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
   <div class="box">
     <h2>🔒 Comptabilité protégée</h2>
     <p>Entrez le mot de passe pour déchiffrer les données.</p>
-    <input type="password" id="lockPwd" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')App.unlock()">
+    <input type="password" id="lockPwd" placeholder="Mot de passe">
     <div class="err" id="lockErr"></div>
-    <button class="btn" style="margin-top:10px;width:100%" onclick="App.unlock()">Déverrouiller</button>
+    <button class="btn" style="margin-top:10px;width:100%" data-act="unlock">Déverrouiller</button>
   </div>
 </div>
 
@@ -142,18 +142,18 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
   <span id="appVer" title="Version installée" style="font-size:11px;opacity:.7">v__APP_VERSION__</span>
   <div class="spacer"></div>
   <label>Exercice&nbsp;
-    <select id="yearSelect" onchange="App.setYear(this.value)"></select>
+    <select id="yearSelect" data-change="setYear"></select>
   </label>
 </header>
 
 <nav class="tabs no-print">
-  <button data-tab="dashboard" class="active" onclick="App.showTab('dashboard')">Tableau de bord</button>
-  <button data-tab="encode" onclick="App.showTab('encode')">Encoder</button>
-  <button data-tab="journal" onclick="App.showTab('journal')">Opérations</button>
-  <button data-tab="accounts" onclick="App.showTab('accounts')">Plan comptable</button>
-  <button data-tab="reports" onclick="App.showTab('reports')">Rapports &amp; Comptes annuels</button>
-  <button data-tab="help" onclick="App.showTab('help')">❓ Aide</button>
-  <button data-tab="settings" onclick="App.showTab('settings')">Paramètres</button>
+  <button data-tab="dashboard" class="active" data-act="showTab" data-arg="dashboard">Tableau de bord</button>
+  <button data-tab="encode" data-act="showTab" data-arg="encode">Encoder</button>
+  <button data-tab="journal" data-act="showTab" data-arg="journal">Opérations</button>
+  <button data-tab="accounts" data-act="showTab" data-arg="accounts">Plan comptable</button>
+  <button data-tab="reports" data-act="showTab" data-arg="reports">Rapports &amp; Comptes annuels</button>
+  <button data-tab="help" data-act="showTab" data-arg="help">❓ Aide</button>
+  <button data-tab="settings" data-act="showTab" data-arg="settings">Paramètres</button>
 </nav>
 
 <main>
@@ -176,7 +176,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
       <p class="muted">C'est ici que vous encodez 95 % des opérations : un achat payé par la banque ou la caisse, une subvention reçue, un don, une cotisation… La comptabilité en partie double est générée automatiquement, vous n'avez rien d'autre à faire.</p>
       <div class="row">
         <div><label class="fld">Type d'opération</label>
-          <select id="sType">
+          <select id="sType" data-change="fillSimpleAccounts">
             <option value="dep">Dépense — de l'argent sort</option>
             <option value="rec">Recette — de l'argent rentre</option>
             <option value="vir">Virement entre banque et caisse</option>
@@ -189,13 +189,13 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
         <div><label class="fld">Montant (€)</label><input type="number" id="sAmount" step="0.01" min="0" placeholder="0,00"></div>
       </div>
       <div style="margin-top:10px" id="sAccountWrap"><label class="fld">Catégorie — de quoi s'agit-il ?</label>
-        <select id="sAccount" onchange="App.onSimpleAccountChange(this)"></select>
+        <select id="sAccount" data-change="onSimpleAccountChange"></select>
         <div class="muted" style="margin-top:3px">Tout le plan comptable est listé en ordre croissant (1 → 7), groupé par famille. Les dépenses courantes commencent par 6, les recettes par 7. Il manque une catégorie ? Choisissez « ➕ Créer une nouvelle catégorie » en bas de la liste.</div></div>
       <div style="margin-top:10px"><label class="fld">Description (pour vous y retrouver)</label>
         <input type="text" id="sComment" placeholder="Ex : fournitures goûters Colruyt"></div>
       <div style="margin-top:14px">
-        <button class="btn" id="sSaveBtn" onclick="App.saveSimple()">Enregistrer l'opération</button>
-        <button class="btn secondary" id="sCancelBtn" style="display:none" onclick="App.resetSimpleForm()">Annuler la modification</button>
+        <button class="btn" id="sSaveBtn" data-act="saveSimple">Enregistrer l'opération</button>
+        <button class="btn secondary" id="sCancelBtn" style="display:none" data-act="resetSimpleForm">Annuler la modification</button>
         <input type="hidden" id="sEditId">
       </div>
     </div>
@@ -214,11 +214,11 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
         <thead><tr><th style="width:44%">Compte</th><th>Débit</th><th>Crédit</th><th></th></tr></thead>
         <tbody id="eLines"></tbody>
       </table>
-      <button class="btn small secondary" style="margin-top:8px" onclick="App.addLine()">+ Ajouter une ligne</button>
+      <button class="btn small secondary" style="margin-top:8px" data-act="addLineBtn">+ Ajouter une ligne</button>
       <div id="eBalance" class="balanceInfo"></div>
-      <button class="btn" id="eSaveBtn" onclick="App.saveEntry()">Enregistrer l'écriture</button>
+      <button class="btn" id="eSaveBtn" data-act="saveEntry">Enregistrer l'écriture</button>
       <input type="hidden" id="eEditId">
-      <button class="btn secondary" id="eCancelBtn" style="display:none" onclick="App.cancelEdit()">Annuler la modification</button>
+      <button class="btn secondary" id="eCancelBtn" style="display:none" data-act="cancelEdit">Annuler la modification</button>
     </div>
   </div>
 </section>
@@ -228,10 +228,10 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
   <div class="card">
     <h2>Écritures de l'exercice</h2>
     <div class="toolbar">
-      <label>Journal&nbsp;<select id="jFilter" onchange="App.renderJournal()"><option value="">Tous</option></select></label>
-      <input type="text" id="jSearch" placeholder="Rechercher…" style="max-width:240px" oninput="App.renderJournal()">
+      <label>Journal&nbsp;<select id="jFilter" data-change="renderJournal"><option value="">Tous</option></select></label>
+      <input type="text" id="jSearch" placeholder="Rechercher…" style="max-width:240px" data-input="renderJournal">
       <div class="spacer" style="flex:1"></div>
-      <button class="btn secondary" onclick="App.exportCSV()">Exporter CSV</button>
+      <button class="btn secondary" data-act="exportCSV">Exporter CSV</button>
     </div>
     <div id="journalList"></div>
   </div>
@@ -244,7 +244,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
     <div class="row" style="align-items:flex-end">
       <div><label class="fld">N° de compte (6 chiffres)</label><input type="text" id="accCode" maxlength="6" placeholder="612000"></div>
       <div style="flex:2"><label class="fld">Libellé</label><input type="text" id="accLabel" placeholder="Fournitures pour goûters"></div>
-      <div style="flex:0"><button class="btn" onclick="App.addAccount()">Ajouter / Modifier</button></div>
+      <div style="flex:0"><button class="btn" data-act="addAccount">Ajouter / Modifier</button></div>
     </div>
     <div id="accountsList" style="margin-top:16px"></div>
   </div>
@@ -255,15 +255,15 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
   <div class="card no-print">
     <h2>Rapports</h2>
     <div class="toolbar">
-      <button class="btn" onclick="App.report('annuels')">📄 Comptes annuels (fiche complète)</button>
-      <button class="btn secondary" onclick="App.report('cr')">Compte de résultats</button>
-      <button class="btn secondary" onclick="App.report('bilan')">Bilan</button>
-      <button class="btn secondary" onclick="App.report('charges')">Détail des charges</button>
-      <button class="btn secondary" onclick="App.report('balance')">Balance des comptes</button>
-      <button class="btn secondary" onclick="App.report('historique')">Historique des comptes</button>
+      <button class="btn" data-act="report" data-arg="annuels">📄 Comptes annuels (fiche complète)</button>
+      <button class="btn secondary" data-act="report" data-arg="cr">Compte de résultats</button>
+      <button class="btn secondary" data-act="report" data-arg="bilan">Bilan</button>
+      <button class="btn secondary" data-act="report" data-arg="charges">Détail des charges</button>
+      <button class="btn secondary" data-act="report" data-arg="balance">Balance des comptes</button>
+      <button class="btn secondary" data-act="report" data-arg="historique">Historique des comptes</button>
     </div>
     <div class="toolbar">
-      <button class="btn" onclick="App.printReport()">🖨️ Imprimer / Exporter en PDF</button>
+      <button class="btn" data-act="printReport">🖨️ Imprimer / Exporter en PDF</button>
       <span class="muted">L'export PDF utilise la fonction d'impression du navigateur : choisissez « Enregistrer au format PDF » comme imprimante.</span>
     </div>
   </div>
@@ -344,7 +344,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
       <label class="fld" style="margin-top:8px">Code postal et localité</label><input type="text" id="setAddr2">
       <label class="fld" style="margin-top:8px">N° d'entreprise (BCE)</label><input type="text" id="setVat" placeholder="BE 0xxx.xxx.xxx">
       <label class="fld" style="margin-top:8px">Signataire des comptes (nom, fonction)</label><input type="text" id="setSigner" placeholder="Nom Prénom, Président(e)">
-      <div style="margin-top:12px"><button class="btn" onclick="App.saveSettings()">Enregistrer</button></div>
+      <div style="margin-top:12px"><button class="btn" data-act="saveSettings">Enregistrer</button></div>
     </div>
     <div class="card">
       <h2>Sauvegarde des données</h2>
@@ -352,14 +352,14 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
       <h3>Sauvegarde automatique dans un fichier (recommandé)</h3>
       <p class="muted" id="autoFileStatus"></p>
       <div class="toolbar">
-        <button class="btn" id="autoFileOnBtn" onclick="App.enableAutoFile()">📁 Activer la sauvegarde automatique</button>
-        <button class="btn secondary" id="autoFileOffBtn" style="display:none" onclick="App.disableAutoFile()">Désactiver</button>
+        <button class="btn" id="autoFileOnBtn" data-act="enableAutoFile">📁 Activer la sauvegarde automatique</button>
+        <button class="btn secondary" id="autoFileOffBtn" style="display:none" data-act="disableAutoFile">Désactiver</button>
       </div>
       <h3>Sauvegarde manuelle</h3>
       <div class="toolbar">
-        <button class="btn" onclick="App.backup()">⬇️ Télécharger une sauvegarde (JSON)</button>
-        <button class="btn secondary" onclick="document.getElementById('restoreFile').click()">⬆️ Restaurer une sauvegarde</button>
-        <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="App.restore(this)">
+        <button class="btn" data-act="backup">⬇️ Télécharger une sauvegarde (JSON)</button>
+        <button class="btn secondary" data-act="pickRestore">⬆️ Restaurer une sauvegarde</button>
+        <input type="file" id="restoreFile" accept=".json" style="display:none" data-change="restore">
       </div>
       <p class="muted">⚠ Les fichiers de sauvegarde ne sont pas chiffrés : conservez-les en lieu sûr. Ils permettent de récupérer les données en cas d'oubli du mot de passe.</p>
       <h3>Versions précédentes</h3>
@@ -372,14 +372,14 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
         <div><label class="fld">Confirmation</label><input type="password" id="setPwd2"></div>
       </div>
       <div class="toolbar" style="margin-top:10px">
-        <button class="btn" onclick="App.setPassword()">Activer / changer le mot de passe</button>
-        <button class="btn secondary" id="pwdRemoveBtn" onclick="App.removePassword()">Désactiver</button>
+        <button class="btn" data-act="setPassword">Activer / changer le mot de passe</button>
+        <button class="btn secondary" id="pwdRemoveBtn" data-act="removePassword">Désactiver</button>
       </div>
       <h2 style="margin-top:24px">Clôture d'exercice</h2>
       <p class="muted">Génère l'écriture d'ouverture de l'exercice suivant : report des soldes des comptes de bilan et affectation du résultat au compte 140000.</p>
-      <button class="btn" onclick="App.closeYear()">Générer l'ouverture de l'exercice <span id="nextYearLbl"></span></button>
+      <button class="btn" data-act="closeYear">Générer l'ouverture de l'exercice <span id="nextYearLbl"></span></button>
       <h2 style="margin-top:24px">Zone dangereuse</h2>
-      <button class="btn danger" onclick="App.resetAll()">Effacer toutes les données</button>
+      <button class="btn danger" data-act="resetAll">Effacer toutes les données</button>
     </div>
   </div>
 </section>

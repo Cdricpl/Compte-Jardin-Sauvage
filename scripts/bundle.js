@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-/* Génère dist/index.html : une version AUTONOME (un seul fichier) de
-   l'application, où les 5 scripts (config, storage, accounting, reports, ui)
-   sont intégrés en ligne dans la page.
+/* Génère dist/ : la version embarquée dans l'application de bureau.
+     - dist/app.js     : les 5 scripts concaténés en UN fichier externe
+     - dist/index.html : la page, référençant <script src="app.js?v=VERSION">
 
-   Pourquoi : en application de bureau, charger 5 fichiers .js séparés expose
-   à des échecs partiels (un fichier non chargé / servi depuis un cache
-   périmé par le WebView après une mise à jour → « storageRead is not
-   defined »). Un fichier unique rend ce problème impossible : tout le code
-   arrive avec la page, dans le même ordre et le même contexte.
+   Pourquoi externe (et non en ligne) : la Content-Security-Policy de
+   l'application de bureau interdit les scripts EN LIGNE (inline). Un seul
+   fichier .js EXTERNE est autorisé (script-src 'self'), évite tout
+   chargement partiel (un seul fichier) et le « ?v= » force le
+   rafraîchissement après mise à jour (pas de cache périmé).
 
    Les fichiers source restent modulaires dans app/ (dev + tests). */
 "use strict";
@@ -19,34 +19,30 @@ const appDir = path.join(root, "app");
 const outDir = path.join(root, "dist");
 
 const ORDER = ["config.js", "storage.js", "accounting.js", "reports.js", "ui.js"];
-
 const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
+
+const js = ORDER.map(f =>
+  `/* ===== ${f} ===== */\n` + fs.readFileSync(path.join(appDir, f), "utf8")
+).join("\n");
 
 let html = fs.readFileSync(path.join(appDir, "index.html"), "utf8")
   .replace(/__APP_VERSION__/g, version);
 
-// Concatène les 5 scripts ; neutralise toute éventuelle séquence </script>
-// présente dans une chaîne/commentaire pour ne pas casser la balise inline.
-const js = ORDER.map(f => {
-  const code = fs.readFileSync(path.join(appDir, f), "utf8");
-  return `/* ===== ${f} ===== */\n` + code;
-}).join("\n").replace(/<\/script>/gi, "<\\/script>");
-
-// Remplace le bloc des 5 balises <script src="..."></script> par un seul
-// bloc <script> en ligne contenant tout le code.
 const blockRe = /<script src="config\.js"><\/script>[\s\S]*?<script src="ui\.js"><\/script>/;
 if (!blockRe.test(html)) {
   console.error("bundle.js : bloc <script src> introuvable dans app/index.html");
   process.exit(1);
 }
-html = html.replace(blockRe, `<script>\n${js}\n</script>`);
+html = html.replace(blockRe, `<script src="app.js?v=${version}"></script>`);
 
 fs.mkdirSync(outDir, { recursive: true });
+fs.writeFileSync(path.join(outDir, "app.js"), js);
 fs.writeFileSync(path.join(outDir, "index.html"), html);
 
-// Vérification : plus aucune référence externe .js, et taille cohérente.
-if (/<script src=/.test(html)) {
-  console.error("bundle.js : il reste des <script src> externes !");
-  process.exit(1);
-}
-console.log(`bundle.js : dist/index.html généré (${(html.length/1024).toFixed(0)} Ko, ${ORDER.length} scripts intégrés)`);
+// Garde-fous : aucun script en ligne, aucun gestionnaire on* en ligne.
+const inlineScript = /<script>(?![\s\S]*src=)/.test(html);
+const inlineHandlers = (html.match(/\son[a-z]+=/gi) || []);
+if (inlineScript) { console.error("bundle.js : script EN LIGNE détecté dans index.html"); process.exit(1); }
+if (inlineHandlers.length) { console.error("bundle.js : gestionnaires en ligne détectés :", inlineHandlers.join(",")); process.exit(1); }
+
+console.log(`bundle.js : dist/app.js (${(js.length/1024).toFixed(0)} Ko) + dist/index.html générés, version ${version}`);
