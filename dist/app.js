@@ -1,3 +1,674 @@
+/* ===== config.js ===== */
+"use strict";
+
+const STORE_KEY  = "edd-compta-v1";
+const SNAP_KEY   = "edd-compta-snapshots";
+const EXPORT_KEY = "edd-compta-lastexport";
+
+const JOURNALS = [
+  {code:"BAN", label:"Banque"},
+  {code:"CAI", label:"Caisse"},
+  {code:"ODV", label:"Opérations diverses"},
+  {code:"ODR", label:"Ouverture / réouverture"},
+];
+
+const DEFAULT_ACCOUNTS = [
+  ["100000","Patrimoine de départ"],
+  ["140000","Bénéfice reporté (ou perte reportée)"],
+  ["230000","Installations"],
+  ["239000","Amortissements s/installations"],
+  ["240000","Mobilier et matériel"],
+  ["249000","Amortissements s/mobilier et matériel"],
+  ["440000","Fournisseurs"],
+  ["444000","Factures à recevoir"],
+  ["453000","Précompte professionnel"],
+  ["454000","ONSS"],
+  ["455000","Rémunérations à payer"],
+  ["456000","Provision pécules de vacances"],
+  ["490000","Charges à reporter"],
+  ["491000","Produits acquis"],
+  ["492000","Charges à imputer"],
+  ["550000","Banque — compte courant"],
+  ["570000","Caisse"],
+  ["580000","Virements internes"],
+  ["601000","Achats de fournitures"],
+  ["611120","Frais de voyage / transports par tiers"],
+  ["612000","Fournitures pour goûters"],
+  ["612001","Fournitures pour stages"],
+  ["612100","Documentation, formation"],
+  ["612170","Petit matériel et outillage"],
+  ["612180","Petit matériel didactique"],
+  ["612190","Matériel scolaire"],
+  ["612200","Imprimés et fournitures de bureau"],
+  ["612210","Matériel de bricolage"],
+  ["612500","Plan de cohésion sociale (activités)"],
+  ["612900","Produits d'entretien"],
+  ["613000","Prestations extérieures diverses"],
+  ["613100","Activités extérieures"],
+  ["613110","Activités festives"],
+  ["613210","Honoraires"],
+  ["614010","Assurance incendie"],
+  ["614030","Assurance responsabilité civile"],
+  ["615020","Cotisations professionnelles"],
+  ["615030","Publications légales"],
+  ["620200","Rémunérations employés"],
+  ["621000","Cotisations patronales d'assurance sociale"],
+  ["622000","Assurance loi"],
+  ["623010","Dotation provision pécule de vacances"],
+  ["623015","Reprise provision pécule de vacances"],
+  ["623020","Supplément pécule de vacances"],
+  ["623050","Bonus à l'emploi"],
+  ["623100","Pécule de vacances"],
+  ["623110","Frais de déplacement domicile — lieu de travail"],
+  ["623300","Liantis / Provikmo (secrétariat social)"],
+  ["630200","Dotations aux amortissements"],
+  ["640400","SABAM / Reprobel"],
+  ["650100","Frais bancaires"],
+  ["653000","Charges d'escompte"],
+  ["700000","Recettes stages"],
+  ["701000","Recettes école des devoirs"],
+  ["702000","Recettes brocante / événements"],
+  ["730000","Cotisations membres adhérents"],
+  ["733000","Dons reçus"],
+  ["740100","Subventions Forem / APE"],
+  ["740200","Subventions communales"],
+  ["740300","Subventions ONE"],
+  ["740400","Plan de cohésion sociale (subside)"],
+  ["740500","Réductions précompte professionnel"],
+  ["750000","Produits financiers"],
+];
+
+/* ===== storage.js ===== */
+"use strict";
+
+/* ── Détection Tauri (desktop) vs navigateur ── */
+const isTauri = typeof window !== 'undefined' && typeof window.__TAURI__ !== 'undefined'
+             && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function';
+
+/* Si l'IPC Tauri ne répond pas (timeout/erreur), on bascule sur localStorage
+   pour que l'application démarre TOUJOURS, avec un avertissement visible. */
+let tauriBroken = false;
+
+function invokeT(cmd, args){
+  return new Promise((resolve, reject)=>{
+    const h = setTimeout(()=>reject(new Error("le stockage de l'application ne répond pas")), 3000);
+    window.__TAURI__.core.invoke(cmd, args).then(
+      v=>{ clearTimeout(h); resolve(v); },
+      e=>{ clearTimeout(h); reject(e); });
+  });
+}
+
+/* ── Abstraction stockage (Tauri : fichier système / navigateur : localStorage) ── */
+async function storageRead(){
+  if(isTauri && !tauriBroken){
+    try{ return await invokeT('read_data'); }
+    catch(e){ tauriBroken = true; console.error("Stockage fichier indisponible :", e); }
+  }
+  try{ return localStorage.getItem(STORE_KEY); }catch(e){ return null; }
+}
+async function storageWrite(raw){
+  if(isTauri && !tauriBroken){
+    try{ await invokeT('write_data', {data: raw}); return; }
+    catch(e){ tauriBroken = true; console.error("Stockage fichier indisponible :", e); }
+  }
+  localStorage.setItem(STORE_KEY, raw);
+}
+async function snapshotsRead(){
+  if(isTauri && !tauriBroken){
+    try{ return await invokeT('read_snapshots'); }
+    catch(e){ tauriBroken = true; }
+  }
+  try{ return localStorage.getItem(SNAP_KEY); }catch(e){ return null; }
+}
+async function snapshotsWrite(raw){
+  if(isTauri && !tauriBroken){
+    try{ await invokeT('write_snapshots', {data: raw}); return; }
+    catch(e){ tauriBroken = true; }
+  }
+  localStorage.setItem(SNAP_KEY, raw);
+}
+
+/* ── IndexedDB minimal (mémoriser le handle de sauvegarde auto) ── */
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open("edd-compta-fs", 1);
+    r.onupgradeneeded = ()=>r.result.createObjectStore("kv");
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+async function idbGet(key){
+  try{
+    const db = await idbOpen();
+    return await new Promise(res=>{
+      const g = db.transaction("kv","readonly").objectStore("kv").get(key);
+      g.onsuccess = ()=>res(g.result); g.onerror = ()=>res(null);
+    });
+  }catch(e){ return null; }
+}
+async function idbSet(key,val){
+  try{
+    const db = await idbOpen();
+    await new Promise(res=>{
+      const tx = db.transaction("kv","readwrite");
+      tx.objectStore("kv").put(val,key);
+      tx.oncomplete = res; tx.onerror = res;
+    });
+  }catch(e){}
+}
+async function idbDel(key){
+  try{
+    const db = await idbOpen();
+    await new Promise(res=>{
+      const tx = db.transaction("kv","readwrite");
+      tx.objectStore("kv").delete(key);
+      tx.oncomplete = res; tx.onerror = res;
+    });
+  }catch(e){}
+}
+
+/* ── Chiffrement AES-256-GCM, clé dérivée par PBKDF2 ── */
+let cryptoKey = null, passSalt = null;
+const txtEnc = new TextEncoder(), txtDec = new TextDecoder();
+const b64   = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s   => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+
+async function deriveKey(pwd, salt){
+  const km = await crypto.subtle.importKey("raw", txtEnc.encode(pwd), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt, iterations:200000, hash:"SHA-256"},
+    km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+
+/* ── État de la base de données ── */
+let DB = null;
+let curYear = new Date().getFullYear();
+
+function defaultDB(){
+  return {
+    settings:{name:"EDD ASBL", addr1:"", addr2:"", vat:"", signer:""},
+    accounts: DEFAULT_ACCOUNTS.map(([code,label])=>({code,label})),
+    entries: []
+  };
+}
+
+function loadPlain(obj){
+  DB = obj || defaultDB();
+  if(!DB.settings) DB.settings = defaultDB().settings;
+  if(!DB.accounts) DB.accounts = defaultDB().accounts;
+  if(!DB.entries)  DB.entries  = [];
+}
+
+/* ── Snapshots (filet de sécurité : 15 derniers états) ── */
+async function pushSnapshot(raw){
+  try{
+    const existing = await snapshotsRead();
+    const snaps = JSON.parse(existing||"[]");
+    snaps.push({t:Date.now(), raw});
+    while(snaps.length>15) snaps.shift();
+    await snapshotsWrite(JSON.stringify(snaps));
+  }catch(e){}
+}
+
+function stampSaved(){
+  const el = document.getElementById("saveStamp");
+  if(el) el.textContent = "💾 Enregistré à " +
+    new Date().toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+
+/* ── Sauvegarde principale (localStorage + snapshot + fichier auto) ── */
+let _saving = Promise.resolve();
+let autoHandle = null;
+
+function save(){
+  _saving = _saving.then(async ()=>{
+    let raw;
+    if(cryptoKey){
+      const iv   = crypto.getRandomValues(new Uint8Array(12));
+      const data = await crypto.subtle.encrypt({name:"AES-GCM", iv}, cryptoKey, txtEnc.encode(JSON.stringify(DB)));
+      raw = JSON.stringify({__enc:1, salt:b64(passSalt), iv:b64(iv), data:b64(data)});
+    } else {
+      raw = JSON.stringify(DB);
+    }
+    await storageWrite(raw);
+    await pushSnapshot(raw);
+    stampSaved();
+    if(!isTauri && autoHandle) await App.writeAutoFile();
+  }).catch(e=>toast("Erreur d'enregistrement : "+e.message, true));
+  return _saving;
+}
+
+/* ===== accounting.js ===== */
+"use strict";
+
+/* ── Utilitaires numériques et affichage ── */
+const r2 = x => Math.round((x + Number.EPSILON) * 100) / 100;
+
+function fmt(n){
+  return r2(n).toLocaleString("de-DE",{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function parseAmount(s){
+  if(typeof s === "number") return s;
+  if(!s) return 0;
+  s = String(s).trim().replace(",", ".");
+  const v = parseFloat(s);
+  return isNaN(v) ? 0 : v;
+}
+
+function esc(s){
+  return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+
+function dFR(iso){
+  const [y,m,d] = iso.split("-");
+  return `${d}-${m}-${y}`;
+}
+
+function toast(msg, err){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "msg"+(err?" err":"");
+  t.style.display = "block";
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.style.display="none", 3500);
+}
+
+/* ── Accès au plan comptable ── */
+function accLabel(code){
+  const a = DB.accounts.find(a=>a.code===code);
+  return a ? a.label : code;
+}
+
+function accountsSorted(){
+  return [...DB.accounts].sort((a,b)=>a.code.localeCompare(b.code));
+}
+
+/* ── Entrées et numérotation ── */
+function entriesOfYear(y){
+  return DB.entries
+    .filter(e=>e.date && e.date.startsWith(String(y)))
+    .sort((a,b)=> a.date===b.date
+      ? (a.piece||"").localeCompare(b.piece||"")
+      : a.date.localeCompare(b.date));
+}
+
+function nextPiece(journal, year){
+  let max = 0;
+  DB.entries.forEach(e=>{
+    if(e.journal===journal && e.date && e.date.startsWith(String(year))){
+      const n = parseInt((e.piece||"").slice(4), 10);
+      if(!isNaN(n) && n>max) max = n;
+    }
+  });
+  return String(year) + String(max+1).padStart(4,"0");
+}
+
+/* ── Soldes et calculs comptables ── */
+function balances(year){
+  const m = {};
+  entriesOfYear(year).forEach(e=> e.lines.forEach(l=>{
+    if(!m[l.account]) m[l.account] = {deb:0, cre:0};
+    m[l.account].deb = r2(m[l.account].deb + (l.debit||0));
+    m[l.account].cre = r2(m[l.account].cre + (l.credit||0));
+  }));
+  return m;
+}
+
+function solde(bal, code){
+  const b = bal[code];
+  return b ? r2(b.deb - b.cre) : 0;
+}
+
+function accountsIn(bal, pred){
+  return accountsSorted()
+    .filter(a=>pred(a.code))
+    .map(a=>({...a, s: solde(bal,a.code), mv: !!bal[a.code]}));
+}
+
+function sum(arr, f){
+  return r2(arr.reduce((t,x)=>r2(t+f(x)), 0));
+}
+
+function resultOfYear(bal){
+  let res = 0;
+  for(const code in bal){
+    const c = code[0];
+    if(c==="6") res = r2(res - (bal[code].deb - bal[code].cre));
+    else if(c==="7") res = r2(res + (bal[code].cre - bal[code].deb));
+  }
+  return res;
+}
+
+/* ===== reports.js ===== */
+"use strict";
+
+const Reports = {
+
+  rpHead(){
+    const s = DB.settings;
+    return `<div class="rp-head">
+      <div class="rp-name">${esc(s.name)}</div>
+      <div class="rp-sub">${esc(s.addr1)}</div>
+      <div class="rp-sub">${esc(s.addr2)}</div>
+      <div class="rp-sub">${esc(s.vat)}</div></div>`;
+  },
+
+  /* ── Compte de résultats ── */
+  htmlCR(bal){
+    const y = curYear;
+    const rows = [];
+    const line    = (lbl,v,col) => rows.push(`<tr><td class="lbl">${esc(lbl)}</td><td class="c1">${col===1?fmt(v):""}</td><td class="c2">${col===2?fmt(v):""}</td><td class="c3">${col===3?fmt(v):""}</td></tr>`);
+    const subtotal = v          => rows.push(`<tr class="subtotal"><td class="lbl"></td><td class="c1"></td><td class="c2"></td><td class="c3">${fmt(v)}</td></tr>`);
+    const bigline  = (lbl,v)    => rows.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">${esc(lbl)}</td><td class="c1"></td><td class="c2"></td><td class="c3">${fmt(v)}</td></tr>`);
+    const blank    = ()         => rows.push(`<tr><td colspan="4">&nbsp;</td></tr>`);
+
+    // Comptes 6/7 déjà repris : garantit que le résultat du CR == resultOfYear
+    // (sinon un compte ajouté en 71/72/77 ou 67/68/69 fausserait le résultat).
+    const seen = new Set();
+    const mark = arr => { arr.forEach(a=>seen.add(a.code)); return arr; };
+
+    rows.push(`<tr><td colspan="4" class="rp-section">PRODUITS ET CHARGES D'EXPLOITATION</td></tr>`);
+
+    const p70 = mark(accountsIn(bal, c=>c.startsWith("70")).filter(a=>a.mv));
+    p70.forEach(a=>line(a.label, r2(-a.s), 2));
+    const t70 = sum(p70, a=>r2(-a.s));
+    if(p70.length) subtotal(t70);
+
+    const p73 = mark(accountsIn(bal, c=>/^7[1-4]/.test(c)).filter(a=>a.mv));
+    p73.forEach(a=>line(a.label, r2(-a.s), 2));
+    const t73 = sum(p73, a=>r2(-a.s));
+    if(p73.length) subtotal(t73);
+
+    const marge = r2(t70+t73);
+    bigline("MARGE BRUTE D'EXPLOITATION :", marge);
+    blank();
+
+    const grp = (pred, lbl)=>{
+      const accs = mark(accountsIn(bal,pred).filter(a=>a.mv));
+      const tot  = sum(accs, a=>a.s);
+      if(accs.length){
+        line(lbl, r2(-tot), 2);
+        rows.push(`<tr><td class="lbl" style="font-style:italic;font-size:12px">(suivant le détail en annexe)</td><td colspan="3"></td></tr>`);
+      }
+      return tot;
+    };
+    const t6061 = grp(c=>c.startsWith("60")||c.startsWith("61"), "Biens et services divers");
+    const t62   = grp(c=>c.startsWith("62"), "Rémunérations et charges sociales");
+    const t63   = grp(c=>c.startsWith("63"), "Dotations aux amortissements et provisions");
+    const t64   = grp(c=>c.startsWith("64"), "Autres charges d'exploitation");
+    const totCh = r2(t6061+t62+t63+t64);
+    subtotal(r2(-totCh));
+    const resExp = r2(marge - totCh);
+    bigline(resExp>=0?"BENEFICE D'EXPLOITATION :":"PERTE D'EXPLOITATION :", resExp);
+    blank();
+
+    rows.push(`<tr><td colspan="4" class="rp-section">PRODUITS ET CHARGES FINANCIERES</td></tr>`);
+    const p75 = mark(accountsIn(bal,c=>c.startsWith("75")).filter(a=>a.mv));
+    p75.forEach(a=>line(a.label, r2(-a.s), 2));
+    const c65 = mark(accountsIn(bal,c=>c.startsWith("65")).filter(a=>a.mv));
+    c65.forEach(a=>line(a.label, r2(-a.s), 2));
+    const tFin = r2(sum(p75,a=>r2(-a.s)) - sum(c65,a=>a.s));
+    subtotal(tFin);
+    let res = r2(resExp + tFin);
+
+    const p76 = mark(accountsIn(bal,c=>c.startsWith("76")||c.startsWith("77")).filter(a=>a.mv));
+    const c66 = mark(accountsIn(bal,c=>c.startsWith("66")).filter(a=>a.mv));
+    if(p76.length||c66.length){
+      blank();
+      rows.push(`<tr><td colspan="4" class="rp-section">PRODUITS ET CHARGES EXCEPTIONNELS</td></tr>`);
+      p76.forEach(a=>line(a.label, r2(-a.s), 2));
+      c66.forEach(a=>line(a.label, r2(-a.s), 2));
+      const tExc = r2(sum(p76,a=>r2(-a.s)) - sum(c66,a=>a.s));
+      subtotal(tExc);
+      res = r2(res + tExc);
+    }
+
+    // Filet de sécurité : tout produit (7) / charge (6) non repris ci-dessus,
+    // pour que le résultat affiché égale toujours celui du bilan (resultOfYear).
+    const autresP = accountsIn(bal, c=>c[0]==="7").filter(a=>a.mv && !seen.has(a.code));
+    const autresC = accountsIn(bal, c=>c[0]==="6").filter(a=>a.mv && !seen.has(a.code));
+    if(autresP.length||autresC.length){
+      blank();
+      rows.push(`<tr><td colspan="4" class="rp-section">AUTRES PRODUITS ET CHARGES</td></tr>`);
+      autresP.forEach(a=>line(a.label, r2(-a.s), 2));
+      autresC.forEach(a=>line(a.label, r2(-a.s), 2));
+      const tAutres = r2(sum(autresP,a=>r2(-a.s)) - sum(autresC,a=>a.s));
+      subtotal(tAutres);
+      res = r2(res + tAutres);
+    }
+    blank();
+    bigline(res>=0?"BENEFICE DE L'EXERCICE A AFFECTER :":"PERTE DE L'EXERCICE A AFFECTER :", res);
+    blank();
+
+    const reporte    = r2(-solde(bal,"140000"));
+    const aAffecter  = r2(res + reporte);
+    rows.push(`<tr><td colspan="4" style="font-weight:bold;text-decoration:underline">Affectation et prélèvements</td></tr>`);
+    rows.push(`<tr><td class="lbl">${aAffecter>=0?"Bénéfice à affecter":"Perte à affecter"}</td><td class="c1"></td><td class="c2">${fmt(aAffecter)}</td><td class="c3"></td></tr>`);
+    rows.push(`<tr><td class="lbl" style="padding-left:14px">${res>=0?"Bénéfice de l'exercice":"Perte de l'exercice à reporter"}</td><td class="c1">${fmt(res)}</td><td class="c2"></td><td class="c3"></td></tr>`);
+    rows.push(`<tr><td class="lbl" style="padding-left:14px">${reporte>=0?"Bénéfice reporté des exercices précédents":"Perte reportée des exercices précédents"}</td><td class="c1">${fmt(reporte)}</td><td class="c2"></td><td class="c3"></td></tr>`);
+    rows.push(`<tr><td class="lbl">${aAffecter>=0?"Bénéfice à reporter":"Perte à reporter"}</td><td class="c1"></td><td class="c2">${fmt(r2(-aAffecter))} (-)</td><td class="c3"></td></tr>`);
+
+    const signer = DB.settings.signer
+      ? `<div class="rp-sign"><div style="text-align:center">Certifié exact le &nbsp;&nbsp;/&nbsp;&nbsp;/${y+1}</div><br><div style="margin-left:60px">${esc(DB.settings.signer)}</div></div>`
+      : "";
+    return `<div class="rp-page">${this.rpHead()}
+      <div class="rp-title">COMPTE DE RESULTATS AU 31.12.${y}</div>
+      <table class="rp">${rows.join("")}</table>${signer}</div>`;
+  },
+
+  /* ── Bilan actif / passif ── */
+  htmlBilan(bal){
+    const y   = curYear;
+    const res = resultOfYear(bal);
+
+    // Un compte de classe 1-5 est « classé » s'il tombe dans une rubrique
+    // explicite ci-dessous. Tout compte NON classé est repris dans « Autres
+    // actifs/passifs » selon le signe de son solde → le total des deux côtés
+    // capte toujours 100 % des soldes, donc le bilan reste toujours équilibré.
+    const classified = c =>
+      /^[235]/.test(c) || /^4[0-8]/.test(c) || /^49[0-3]/.test(c) ||
+      /^1[0-35]/.test(c) || /^1[67]/.test(c) || c==="140000";
+
+    /* ACTIF */
+    const a = [];
+    const aline = (lbl,v,col) => a.push(`<tr><td class="lbl">${esc(lbl)}</td><td class="c1">${col===1?fmt(v):""}</td><td class="c2">${col===2?fmt(v):""}</td><td class="c3">${col===3?fmt(v):""}</td></tr>`);
+    const asub  = v            => a.push(`<tr class="subtotal"><td class="lbl"></td><td class="c1"></td><td class="c2"></td><td class="c3">${fmt(v)}</td></tr>`);
+    const asec  = t            => a.push(`<tr><td colspan="4" class="rp-section">${t}</td></tr>`);
+    let totA = 0;
+
+    const immo = accountsIn(bal, c=>/^2/.test(c)).filter(x=>x.mv||x.s!==0);
+    if(immo.length){
+      asec("IMMOBILISATIONS");
+      let totImmo = 0;
+      immo.forEach(x=>{ aline(x.label, x.s, 2); totImmo = r2(totImmo+x.s); });
+      asub(totImmo);
+      a.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">TOTAL IMMOBILISATIONS NETTES :</td><td class="c1"></td><td class="c2"></td><td class="c3">${fmt(totImmo)}</td></tr>`);
+      totA = r2(totA+totImmo);
+    }
+    const stocks = accountsIn(bal, c=>/^3/.test(c)).filter(x=>x.s!==0);
+    if(stocks.length){
+      asec("STOCKS");
+      let t=0; stocks.forEach(x=>{ aline(x.label, x.s, 2); t=r2(t+x.s); });
+      asub(t); totA = r2(totA+t);
+    }
+    const crea = accountsIn(bal, c=>/^4(0|1)/.test(c)).filter(x=>x.s!==0);
+    if(crea.length){
+      asec("CREANCES A UN AN AU PLUS");
+      let t=0; crea.forEach(x=>{ aline(x.label, x.s, 2); t=r2(t+x.s); });
+      asub(t); totA = r2(totA+t);
+    }
+    const dispo = accountsIn(bal, c=>/^5/.test(c)).filter(x=>x.mv||x.s!==0);
+    if(dispo.length){
+      asec("VALEURS DISPONIBLES");
+      let t=0; dispo.forEach(x=>{ aline(x.label, x.s, 2); t=r2(t+x.s); });
+      asub(t); totA = r2(totA+t);
+    }
+    const regA = accountsIn(bal, c=>c==="490000"||c==="491000").filter(x=>x.s!==0);
+    if(regA.length){
+      asec("COMPTES DE REGULARISATION");
+      let t=0; regA.forEach(x=>{ aline(x.label, x.s, 2); t=r2(t+x.s); });
+      asub(t); totA = r2(totA+t);
+    }
+    // Filet de sécurité : tout compte d'actif (classe 1-5, solde débiteur)
+    // non classé ci-dessus, pour qu'aucun montant ne disparaisse du total.
+    const autreA = accountsIn(bal, c=>/^[1-5]/.test(c)).filter(x=>x.s>0 && !classified(x.code));
+    if(autreA.length){
+      asec("AUTRES ACTIFS");
+      let t=0; autreA.forEach(x=>{ aline(x.label, x.s, 2); t=r2(t+x.s); });
+      asub(t); totA = r2(totA+t);
+    }
+    a.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">TOTAL DE L'ACTIF :</td><td class="c1"></td><td class="c2"></td><td class="c3" style="border-top:3px double #000">${fmt(totA)}</td></tr>`);
+
+    /* PASSIF */
+    const p = [];
+    const pline = (lbl,v,col) => p.push(`<tr><td class="lbl">${esc(lbl)}</td><td class="c1">${col===1?fmt(v):""}</td><td class="c2">${col===2?fmt(v):""}</td><td class="c3">${col===3?fmt(v):""}</td></tr>`);
+    const psub  = v            => p.push(`<tr class="subtotal"><td class="lbl"></td><td class="c1"></td><td class="c2"></td><td class="c3">${fmt(v)}</td></tr>`);
+    const psec  = t            => p.push(`<tr><td colspan="4" class="rp-section">${t}</td></tr>`);
+    let totP = 0;
+
+    const fonds = accountsIn(bal, c=>/^1[0-35]/.test(c)).filter(x=>x.s!==0);  // 10-13 fonds + 15 subsides en capital
+    psec("FONDS DE L'ASSOCIATION");
+    let tF=0;
+    fonds.forEach(x=>{ pline(x.label, r2(-x.s), 3); tF=r2(tF-x.s); });
+    const reporteFinal = r2(-solde(bal,"140000") + res);  // 140000 traité ici (classé)
+    psec(reporteFinal>=0 ? "BENEFICE REPORTE" : "PERTE REPORTEE");
+    pline(reporteFinal>=0 ? "Bénéfice reporté" : "Perte reportée", reporteFinal, 3);
+    const capProp = r2(tF + reporteFinal);
+    p.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">TOTAL DES CAPITAUX PROPRES :</td><td class="c1"></td><td class="c2"></td><td class="c3">${fmt(capProp)}</td></tr>`);
+    totP = r2(totP + capProp);
+
+    const prov = accountsIn(bal, c=>/^16/.test(c)).filter(x=>x.s!==0);
+    if(prov.length){ psec("PROVISIONS"); let t=0; prov.forEach(x=>{ pline(x.label, r2(-x.s), 3); t=r2(t-x.s); }); psub(t); totP=r2(totP+t); }
+    const dLT = accountsIn(bal, c=>/^17/.test(c)).filter(x=>x.s!==0);
+    if(dLT.length){ psec("DETTES A PLUS D'UN AN"); let t=0; dLT.forEach(x=>{ pline(x.label, r2(-x.s), 3); t=r2(t-x.s); }); psub(t); totP=r2(totP+t); }
+
+    const dCT = accountsIn(bal, c=>/^4[2-8]/.test(c)).filter(x=>x.s!==0);
+    if(dCT.length){
+      psec("DETTES A UN AN AU PLUS");
+      let t=0; dCT.forEach(x=>{ pline(x.label, r2(-x.s), 2); t=r2(t-x.s); });
+      psub(t); totP=r2(totP+t);
+    }
+    const regP = accountsIn(bal, c=>c==="492000"||c==="493000").filter(x=>x.s!==0);
+    if(regP.length){
+      psec("COMPTES DE REGULARISATION");
+      let t=0; regP.forEach(x=>{ pline(x.label, r2(-x.s), 3); t=r2(t-x.s); });
+      psub(t); totP=r2(totP+t);
+    }
+    // Filet de sécurité : tout compte de passif (classe 1-5, solde créditeur)
+    // non classé ci-dessus, pour qu'aucun montant ne disparaisse du total.
+    const autreP = accountsIn(bal, c=>/^[1-5]/.test(c)).filter(x=>x.s<0 && !classified(x.code));
+    if(autreP.length){
+      psec("AUTRES PASSIFS");
+      let t=0; autreP.forEach(x=>{ pline(x.label, r2(-x.s), 3); t=r2(t-x.s); });
+      psub(t); totP=r2(totP+t);
+    }
+    p.push(`<tr class="totalline"><td class="lbl" style="text-align:right;padding-right:30px">TOTAL DU PASSIF :</td><td class="c1"></td><td class="c2"></td><td class="c3" style="border-top:3px double #000">${fmt(totP)}</td></tr>`);
+
+    let warn = "";
+    if(r2(totA-totP)!==0)
+      warn = `<p style="color:#c62828;font-weight:bold" class="no-print">⚠ Le bilan n'est pas équilibré (écart de ${fmt(r2(totA-totP))} €). Vérifiez vos écritures et l'écriture d'ouverture.</p>`;
+
+    return `<div class="rp-page">${this.rpHead()}
+        <div class="rp-title">BILAN AU 31.12.${y}</div>
+        <div class="rp-section" style="font-size:15px">ACTIF</div>
+        <table class="rp">${a.join("")}</table>${warn}</div>
+      <div class="rp-page">${this.rpHead()}
+        <div class="rp-title">BILAN AU 31.12.${y}</div>
+        <div class="rp-section" style="font-size:15px">PASSIF</div>
+        <table class="rp">${p.join("")}</table></div>`;
+  },
+
+  /* ── Détail des charges ── */
+  htmlCharges(bal){
+    const y = curYear;
+    const rows = [];
+    const block = (pred, title)=>{
+      const accs = accountsIn(bal,pred).filter(x=>x.mv);
+      if(!accs.length) return;
+      rows.push(`<tr><td colspan="3" class="rp-section">${title}</td></tr>`);
+      let t=0;
+      accs.forEach(x=>{
+        rows.push(`<tr><td class="lbl">${esc(x.label)}</td><td class="c1">${fmt(x.s)}</td><td class="c2"></td></tr>`);
+        t = r2(t+x.s);
+      });
+      rows.push(`<tr class="subtotal"><td class="lbl"></td><td class="c1" style="font-weight:bold">${fmt(t)}</td><td class="c2"></td></tr>`);
+      rows.push(`<tr><td colspan="3">&nbsp;</td></tr>`);
+    };
+    block(c=>c.startsWith("60")||c.startsWith("61"), "Biens et services");
+    block(c=>c.startsWith("62"), "Rémunérations, charges sociales");
+    block(c=>c.startsWith("63"), "Dotations aux amortissements et provisions");
+    block(c=>c.startsWith("64"), "Autres charges d'exploitation");
+    block(c=>c.startsWith("65"), "Charges financières");
+    block(c=>c.startsWith("66"), "Charges exceptionnelles");
+    block(c=>/^6[789]/.test(c), "Autres charges");
+    return `<div class="rp-page">${this.rpHead()}
+      <div class="rp-title">DETAIL DES CHARGES D'EXPLOITATION AU 31.12.${y}</div>
+      <table class="rp"><colgroup><col style="width:60%"><col style="width:20%"><col style="width:20%"></colgroup>${rows.join("")}</table></div>`;
+  },
+
+  /* ── Balance des comptes généraux ── */
+  htmlBalance(bal){
+    const y = curYear;
+    const rows = [];
+    let tD=0, tC=0;
+    accountsSorted().forEach(a=>{
+      const b = bal[a.code]; if(!b) return;
+      const s = r2(b.deb-b.cre);
+      const sd = s>0?s:0, sc = s<0?-s:0;
+      if(s===0 && !b.deb && !b.cre) return;
+      rows.push(`<tr><td>${a.code}</td><td>${esc(a.label)}</td><td class="num">${sd?fmt(sd):(s===0?"0,00":"")}</td><td class="num">${sc?fmt(sc):""}</td></tr>`);
+      tD=r2(tD+sd); tC=r2(tC+sc);
+    });
+    return `<div class="rp-page">${this.rpHead()}
+      <div class="rp-title">BALANCE DES COMPTES GENERAUX AU 31.12.${y}</div>
+      <table class="rp-bal">
+        <thead><tr><th>N°</th><th style="text-align:left">Compte</th><th>SOLDE DEBIT</th><th>SOLDE CREDIT</th></tr></thead>
+        <tbody>${rows.join("")}
+        <tr class="tot"><td></td><td>TOTAUX :</td><td class="num">${fmt(tD)}</td><td class="num">${fmt(tC)}</td></tr></tbody>
+      </table></div>`;
+  },
+
+  /* ── Historique des comptes généraux ── */
+  htmlHistorique(){
+    const y = curYear;
+    const perAcc = {};
+    entriesOfYear(y).forEach(e=> e.lines.forEach(l=>{
+      (perAcc[l.account] = perAcc[l.account]||[]).push({e, l});
+    }));
+    const blocks = [];
+    accountsSorted().forEach(a=>{
+      const mv = perAcc[a.code]; if(!mv) return;
+      let run=0, tD=0, tC=0;
+      const rws = mv.map(({e,l})=>{
+        run = r2(run + (l.debit||0) - (l.credit||0));
+        tD  = r2(tD  + (l.debit||0));
+        tC  = r2(tC  + (l.credit||0));
+        return `<tr><td>${e.journal}</td><td>${esc(e.piece||"")}</td><td>${dFR(e.date)}</td><td>${esc(e.comment||"")}</td>
+          <td class="num">${l.debit?fmt(l.debit):""}</td><td class="num">${l.credit?fmt(l.credit):""}</td><td class="num">${fmt(run)}</td></tr>`;
+      }).join("");
+      blocks.push(`<div class="rp-hist-acc">${a.code} &nbsp; ${esc(a.label).toUpperCase()}</div>
+        <table class="rp-hist">
+          <thead><tr><th>Journal</th><th>Pièce</th><th>Date</th><th>Commentaire</th><th class="num">Débit</th><th class="num">Crédit</th><th class="num">Solde cumulé</th></tr></thead>
+          <tbody>${rws}<tr class="tot"><td colspan="4">Totaux</td><td class="num">${fmt(tD)}</td><td class="num">${fmt(tC)}</td><td class="num">${fmt(r2(tD-tC))}</td></tr></tbody>
+        </table>`);
+    });
+    return `<div class="rp-page">${this.rpHead()}
+      <div class="rp-title">HISTORIQUE DES COMPTES GENERAUX — EXERCICE ${y}</div>
+      ${blocks.join("") || "<p>Aucune écriture.</p>"}</div>`;
+  },
+
+  /* ── Page de garde ── */
+  htmlCover(){
+    const s = DB.settings, y = curYear;
+    return `<div class="rp-page"><div class="rp-cover">
+      <div><div class="big">${esc(s.name)}</div><div>${esc(s.addr1)}</div><div>${esc(s.addr2)}</div><div>${esc(s.vat)}</div></div>
+      <div><div>***</div><div class="big" style="margin:8px 0">COMPTES ANNUELS ARRETES AU 31.12.${y}</div><div>***</div></div>
+      <div>&nbsp;</div></div></div>`;
+  },
+};
+
+/* ===== ui.js ===== */
 "use strict";
 
 const App = {
