@@ -67,12 +67,6 @@ table.data tr:hover td{background:#f8faf8}
 .help h3{color:var(--accent-dark);margin:20px 0 6px}
 .help p,.help li{font-size:14.5px;line-height:1.55}
 .help .ex{background:#f1f8e9;border-left:4px solid var(--accent);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0}
-#lockScreen{position:fixed;inset:0;background:linear-gradient(160deg,#1b5e20,#2e7d32);display:none;align-items:center;justify-content:center;z-index:100}
-#lockScreen .box{background:#fff;border-radius:12px;padding:30px 34px;width:340px;max-width:90vw;box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center}
-#lockScreen h2{margin:0 0 6px;color:var(--accent-dark)}
-#lockScreen p{color:var(--muted);font-size:13px;margin:0 0 16px}
-#lockScreen input{text-align:center;font-size:16px}
-#lockScreen .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
 
 /* ---------- Rendu "fiche fiduciaire" ---------- */
 #reportContent{background:#fff;border:1px solid var(--line);border-radius:8px;padding:30px 40px;font-family:"Times New Roman",Georgia,serif;font-size:14px;line-height:1.5}
@@ -121,25 +115,15 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
      ou en cas d'erreur (showFatal). S'il reste visible = le JavaScript ne
      s'est pas exécuté du tout. -->
 <div id="bootDiag" style="position:fixed;inset:0;background:#fff;color:#1d2733;font-family:'Segoe UI',system-ui,Arial,sans-serif;padding:40px 28px;z-index:99999">
-  <h2 style="color:#1b5e20;margin:0 0 6px">EDD Compta <span style="color:#6b7a8c;font-weight:normal">v1.1.1</span></h2>
+  <h2 style="color:#1b5e20;margin:0 0 6px">EDD Compta <span style="color:#6b7a8c;font-weight:normal">v1.2.0</span></h2>
   <p style="font-size:16px" id="bootStep">Démarrage en cours…</p>
   <p style="color:#6b7a8c;font-size:14px;max-width:560px">Si ce message reste affiché plus de quelques secondes, la page s'est ouverte mais le programme ne s'est pas lancé. Faites une capture d'écran de cet écran et envoyez-la — elle indique précisément l'origine du problème.</p>
-</div>
-
-<div id="lockScreen">
-  <div class="box">
-    <h2>🔒 Comptabilité protégée</h2>
-    <p>Entrez le mot de passe pour déchiffrer les données.</p>
-    <input type="password" id="lockPwd" placeholder="Mot de passe">
-    <div class="err" id="lockErr"></div>
-    <button class="btn" style="margin-top:10px;width:100%" data-act="unlock">Déverrouiller</button>
-  </div>
 </div>
 
 <header class="topbar no-print">
   <h1 id="appTitle">EDD ASBL — Comptabilité</h1>
   <span id="saveStamp" title="Chaque action est enregistrée immédiatement"></span>
-  <span id="appVer" title="Version installée" style="font-size:11px;opacity:.7">v1.1.1</span>
+  <span id="appVer" title="Version installée" style="font-size:11px;opacity:.7">v1.2.0</span>
   <div class="spacer"></div>
   <label>Exercice&nbsp;
     <select id="yearSelect" data-change="setYear"></select>
@@ -361,20 +345,10 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
         <button class="btn secondary" data-act="pickRestore">⬆️ Restaurer une sauvegarde</button>
         <input type="file" id="restoreFile" accept=".json" style="display:none" data-change="restore">
       </div>
-      <p class="muted">⚠ Les fichiers de sauvegarde ne sont pas chiffrés : conservez-les en lieu sûr. Ils permettent de récupérer les données en cas d'oubli du mot de passe.</p>
+      <p class="muted">⚠ Conservez vos sauvegardes en lieu sûr.</p>
       <h3>Versions précédentes</h3>
       <p class="muted">Le programme conserve automatiquement les 15 derniers états de la comptabilité. En cas d'erreur, revenez en arrière :</p>
       <div id="snapshotList"></div>
-      <h2 style="margin-top:24px">Mot de passe</h2>
-      <p class="muted" id="pwdStatus"></p>
-      <div class="row">
-        <div><label class="fld">Nouveau mot de passe</label><input type="password" id="setPwd1"></div>
-        <div><label class="fld">Confirmation</label><input type="password" id="setPwd2"></div>
-      </div>
-      <div class="toolbar" style="margin-top:10px">
-        <button class="btn" data-act="setPassword">Activer / changer le mot de passe</button>
-        <button class="btn secondary" id="pwdRemoveBtn" data-act="removePassword">Désactiver</button>
-      </div>
       <h2 style="margin-top:24px">Clôture d'exercice</h2>
       <p class="muted">Génère l'écriture d'ouverture de l'exercice suivant : report des soldes des comptes de bilan et affectation du résultat au compte 140000.</p>
       <button class="btn" data-act="closeYear">Générer l'ouverture de l'exercice <span id="nextYearLbl"></span></button>

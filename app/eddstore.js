@@ -92,20 +92,6 @@ async function idbDel(key){
   }catch(e){}
 }
 
-/* ── Chiffrement AES-256-GCM, clé dérivée par PBKDF2 ── */
-let cryptoKey = null, passSalt = null;
-let txtEnc, txtDec;
-try { txtEnc = new TextEncoder(); txtDec = new TextDecoder(); } catch(e) {}
-const b64   = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
-const unb64 = s   => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
-
-async function deriveKey(pwd, salt){
-  const km = await crypto.subtle.importKey("raw", txtEnc.encode(pwd), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    {name:"PBKDF2", salt, iterations:200000, hash:"SHA-256"},
-    km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
-}
-
 /* ── État de la base de données ── */
 let DB = null;
 let curYear = 2026;
@@ -149,14 +135,7 @@ let autoHandle = null;
 
 function save(){
   _saving = _saving.then(async ()=>{
-    let raw;
-    if(cryptoKey){
-      const iv   = crypto.getRandomValues(new Uint8Array(12));
-      const data = await crypto.subtle.encrypt({name:"AES-GCM", iv}, cryptoKey, txtEnc.encode(JSON.stringify(DB)));
-      raw = JSON.stringify({__enc:1, salt:b64(passSalt), iv:b64(iv), data:b64(data)});
-    } else {
-      raw = JSON.stringify(DB);
-    }
+    const raw = JSON.stringify(DB);
     await storageWrite(raw);
     await pushSnapshot(raw);
     stampSaved();

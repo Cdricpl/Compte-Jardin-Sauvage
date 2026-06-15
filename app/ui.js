@@ -15,36 +15,8 @@ const App = {
         showFatal("Les données enregistrées sont illisibles. Une copie a été conservée dans « Versions précédentes » ; restaurez une sauvegarde JSON si nécessaire.");
       }
     }
-    if(raw && raw.__enc===1){
-      hideBoot();
-      this._encBlob = raw;
-      document.getElementById("lockScreen").style.display = "flex";
-      document.getElementById("lockPwd").focus();
-      return;
-    }
     loadPlain(raw);
     this.start();
-  },
-
-  async unlock(){
-    const pwd   = document.getElementById("lockPwd").value;
-    const errEl = document.getElementById("lockErr");
-    if(!pwd){ errEl.textContent = "Entrez le mot de passe."; return; }
-    if(!crypto.subtle){ errEl.textContent = "Chiffrement indisponible dans ce navigateur."; return; }
-    try{
-      const blob = this._encBlob;
-      passSalt   = unb64(blob.salt);
-      cryptoKey  = await deriveKey(pwd, passSalt);
-      const plain = await crypto.subtle.decrypt({name:"AES-GCM", iv:unb64(blob.iv)}, cryptoKey, unb64(blob.data));
-      loadPlain(JSON.parse(txtDec.decode(plain)));
-      document.getElementById("lockScreen").style.display = "none";
-      document.getElementById("lockPwd").value = "";
-      errEl.textContent = "";
-      this.start();
-    }catch(e){
-      cryptoKey = null; passSalt = null;
-      errEl.textContent = "Mot de passe incorrect.";
-    }
   },
 
   start(){
@@ -54,7 +26,6 @@ const App = {
     this.applySettingsToUI();
     this.resetEntryForm();
     this.resetSimpleForm();
-    this.updatePwdStatus();
     this.renderAll();
     try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}
     this.initAutoFile();
@@ -200,40 +171,6 @@ const App = {
       await storageWrite(s.raw);
       location.reload();
     })();
-  },
-
-  /* ── Mot de passe ── */
-  updatePwdStatus(){
-    const on = !!cryptoKey;
-    const el = document.getElementById("pwdStatus");
-    el.textContent = on
-      ? "🔒 Protection active : les données sont chiffrées (AES-256). Le mot de passe sera demandé à chaque ouverture."
-      : "🔓 Aucun mot de passe : les données sont lisibles par toute personne ayant accès à "
-        + (isTauri ? "cet ordinateur." : "ce navigateur.");
-    document.getElementById("pwdRemoveBtn").style.display = on ? "inline-block" : "none";
-  },
-
-  async setPassword(){
-    if(!crypto.subtle) return toast("Chiffrement indisponible dans ce navigateur (ouvrez le fichier dans Chrome, Edge ou Firefox).", true);
-    const p1 = document.getElementById("setPwd1").value;
-    const p2 = document.getElementById("setPwd2").value;
-    if(p1.length<4) return toast("Le mot de passe doit comporter au moins 4 caractères.", true);
-    if(p1!==p2)     return toast("Les deux mots de passe ne correspondent pas.", true);
-    passSalt  = crypto.getRandomValues(new Uint8Array(16));
-    cryptoKey = await deriveKey(p1, passSalt);
-    await save();
-    document.getElementById("setPwd1").value = "";
-    document.getElementById("setPwd2").value = "";
-    this.updatePwdStatus();
-    toast("Mot de passe activé — données chiffrées ✔");
-  },
-
-  async removePassword(){
-    if(!confirm("Désactiver le mot de passe ? Les données seront enregistrées sans chiffrement.")) return;
-    cryptoKey = null; passSalt = null;
-    await save();
-    this.updatePwdStatus();
-    toast("Mot de passe désactivé.");
   },
 
   /* ── Navigation ── */
@@ -691,12 +628,6 @@ const App = {
       input.value = "";   // toujours vider, même si l'utilisateur annule
       try{
         const data = JSON.parse(r.result);
-        if(data.__enc===1){
-          if(confirm("Cette sauvegarde est protégée par un mot de passe. La charger ? (le mot de passe sera demandé)")){
-            storageWrite(r.result).then(()=>location.reload());
-          }
-          return;
-        }
         if(!data.accounts || !data.entries) throw new Error("format");
         if(!confirm("Remplacer toutes les données actuelles par cette sauvegarde ?")) return;
         loadPlain(data);   // complète settings/accounts/entries manquants
@@ -711,8 +642,7 @@ const App = {
   resetAll(){
     if(!confirm("Effacer TOUTES les données (écritures, comptes, paramètres) ? Cette action est irréversible.")) return;
     if(!confirm("Vraiment sûr ? Pensez à faire une sauvegarde d'abord.")) return;
-    DB = defaultDB(); cryptoKey = null; passSalt = null; save();
-    this.updatePwdStatus();
+    DB = defaultDB(); save();
     this.fillSelectors(); this.applySettingsToUI(); this.renderAll();
     toast("Données effacées.");
   },
@@ -822,8 +752,6 @@ function wireUI(){
     const fn = el.dataset.input;
     if(typeof App[fn]==="function") App[fn](el);
   });
-  const lp = document.getElementById("lockPwd");
-  if(lp) lp.addEventListener("keydown", e=>{ if(e.key==="Enter") App.unlock(); });
 }
 
 window.addEventListener("DOMContentLoaded", ()=>{
