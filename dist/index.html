@@ -121,8 +121,8 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
      ou en cas d'erreur (showFatal). S'il reste visible = le JavaScript ne
      s'est pas exécuté du tout. -->
 <div id="bootDiag" style="position:fixed;inset:0;background:#fff;color:#1d2733;font-family:'Segoe UI',system-ui,Arial,sans-serif;padding:40px 28px;z-index:99999">
-  <h2 style="color:#1b5e20;margin:0 0 6px">EDD Compta <span style="color:#6b7a8c;font-weight:normal">v1.0.7</span></h2>
-  <p style="font-size:16px">Démarrage en cours…</p>
+  <h2 style="color:#1b5e20;margin:0 0 6px">EDD Compta <span style="color:#6b7a8c;font-weight:normal">v1.0.8</span></h2>
+  <p style="font-size:16px" id="bootStep">Démarrage en cours…</p>
   <p style="color:#6b7a8c;font-size:14px;max-width:560px">Si ce message reste affiché plus de quelques secondes, la page s'est ouverte mais le programme ne s'est pas lancé. Faites une capture d'écran de cet écran et envoyez-la — elle indique précisément l'origine du problème.</p>
 </div>
 
@@ -139,7 +139,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
 <header class="topbar no-print">
   <h1 id="appTitle">EDD ASBL — Comptabilité</h1>
   <span id="saveStamp" title="Chaque action est enregistrée immédiatement"></span>
-  <span id="appVer" title="Version installée" style="font-size:11px;opacity:.7">v1.0.7</span>
+  <span id="appVer" title="Version installée" style="font-size:11px;opacity:.7">v1.0.8</span>
   <div class="spacer"></div>
   <label>Exercice&nbsp;
     <select id="yearSelect" data-change="setYear"></select>
@@ -388,7 +388,7 @@ table.rp-hist tr.tot td{border-top:1px solid #000;font-weight:bold}
 
 <div class="msg" id="toast"></div>
 
-<script src="app.js?v=1.0.7"></script>
+<script src="app-1.0.8.js"></script>
 
 </body>
 </html>

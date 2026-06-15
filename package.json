@@ -1,6 +1,6 @@
 {
   "name": "edd-compta",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "scripts": {
     "tauri": "tauri",
     "bundle": "node scripts/bundle.js",

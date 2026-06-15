@@ -1,3 +1,4 @@
+try{var _b=document.getElementById('bootStep');if(_b)_b.textContent='Code chargé ✓ — initialisation…';}catch(e){}
 /* ===== config.js ===== */
 "use strict";
 

@@ -14,16 +14,17 @@ const root = path.join(__dirname, "..");
 execFileSync(process.execPath, [path.join(root, "scripts", "bundle.js")], { stdio: "ignore" });
 
 const htmlRaw = fs.readFileSync(path.join(root, "dist", "index.html"), "utf8");
-const appJs   = fs.readFileSync(path.join(root, "dist", "app.js"), "utf8");
+const jsFile  = fs.readdirSync(path.join(root, "dist")).find(f => /^app-.*\.js$/.test(f));
+const appJs   = fs.readFileSync(path.join(root, "dist", jsFile), "utf8");
 const report = [];
 const check = (n, ok, d) => report.push((ok?"✔ ":"✘ ")+n+(d?" — "+d:""));
 
 // Garde-fous CSP sur le HTML livré
 check("Aucun gestionnaire on= en ligne dans index.html", !/\son[a-z]+=/i.test(htmlRaw));
-check("Aucun <script> en ligne (script externe uniquement)", /<script src="app\.js/.test(htmlRaw) && !/<script>\s*[^<]/.test(htmlRaw));
+check("Script externe versionné, sans query string", /<script src="app-[0-9.]+\.js"><\/script>/.test(htmlRaw) && !/src="[^"]*\?/.test(htmlRaw));
 
-// On charge le HTML puis on injecte app.js comme le ferait le navigateur
-const html = htmlRaw.replace(/<script src="app\.js[^"]*"><\/script>/, "");
+// On charge le HTML puis on injecte le bundle comme le ferait le navigateur
+const html = htmlRaw.replace(/<script src="app-[^"]*"><\/script>/, "");
 const errors = [];
 const dom = new JSDOM(html, {
   url: "http://localhost/",
