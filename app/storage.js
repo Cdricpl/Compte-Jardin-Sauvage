@@ -156,3 +156,6 @@ function save(){
   }).catch(e=>toast("Erreur d'enregistrement : "+e.message, true));
   return _saving;
 }
+
+/* marqueur de chargement (diagnostic) */
+try{(window.__L=window.__L||[]).push("storage");}catch(e){}

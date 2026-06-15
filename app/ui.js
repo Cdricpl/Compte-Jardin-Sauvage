@@ -827,6 +827,20 @@ function wireUI(){
 }
 
 window.addEventListener("DOMContentLoaded", ()=>{
+  // Vérifie que les 5 scripts se sont bien chargés (diagnostic robuste,
+  // sans dépendre des autres fichiers). Si l'un manque, on le NOMME à l'écran.
+  var need = ["config","storage","accounting","reports","ui"];
+  var got  = (window.__L || []).concat("ui");   // ui.js s'exécute ici, donc présent
+  var miss = need.filter(function(n){ return got.indexOf(n) < 0; });
+  if(miss.length){
+    var step = document.getElementById("bootStep");
+    if(step){
+      step.textContent = "Erreur : fichier(s) non chargé(s) → " + miss.join(", ")
+        + "  (chargés : " + got.join(", ") + ")";
+      step.style.color = "#c62828";
+    }
+    return;   // ne pas tenter de démarrer si une brique manque
+  }
   try{ wireUI(); }catch(e){ console.error("wireUI:", e); }
   App.init().catch(e=>{
     console.error("Init:", e);

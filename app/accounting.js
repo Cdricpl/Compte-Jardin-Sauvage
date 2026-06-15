@@ -98,3 +98,6 @@ function resultOfYear(bal){
   }
   return res;
 }
+
+/* marqueur de chargement (diagnostic) */
+try{(window.__L=window.__L||[]).push("accounting");}catch(e){}

@@ -76,3 +76,6 @@ const DEFAULT_ACCOUNTS = [
   ["740500","Réductions précompte professionnel"],
   ["750000","Produits financiers"],
 ];
+
+/* marqueur de chargement (diagnostic) */
+try{(window.__L=window.__L||[]).push("config");}catch(e){}

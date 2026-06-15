@@ -1,10 +1,9 @@
 {
   "name": "edd-compta",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "scripts": {
     "tauri": "tauri",
-    "bundle": "node scripts/bundle.js",
-    "test": "node scripts/bundle.js && node tests/test-ui.js && node tests/test-tauri.js && node tests/test-reports.js && node tests/test-bundle.js"
+    "test": "node tests/test-ui.js && node tests/test-tauri.js && node tests/test-reports.js"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

@@ -324,3 +324,6 @@ const Reports = {
       <div>&nbsp;</div></div></div>`;
   },
 };
+
+/* marqueur de chargement (diagnostic) */
+try{(window.__L=window.__L||[]).push("reports");}catch(e){}
