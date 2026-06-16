@@ -1,29 +1,26 @@
 /* Test de démarrage de l'application dans un navigateur simulé (jsdom).
-   Vérifie : erreurs JS, remplissage des menus déroulants, tableau de bord. */
+   Charge le VRAI index.html livré (tout le code est intégré en ligne) et
+   vérifie : erreurs JS, remplissage des menus déroulants, tableau de bord. */
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
 
 const appDir = path.join(__dirname, "..", "app");
-// Retirer les balises <script src> : on injecte les scripts manuellement
-const html = fs.readFileSync(path.join(appDir, "index.html"), "utf8")
-  .replace(/<script src="[^"]+"><\/script>\s*/g, "");
+const html = fs.readFileSync(path.join(appDir, "index.html"), "utf8");
 
 const errors = [];
 
 const dom = new JSDOM(html, {
   url: "http://localhost/",
-  runScripts: "dangerously",
+  runScripts: "dangerously",   // exécute les scripts inline comme un navigateur
   pretendToBeVisual: true,
   beforeParse(window) {
-    // Capturer toutes les erreurs JS
     window.addEventListener("error", (e) => {
       errors.push("ERREUR JS : " + e.message + " @ " + (e.filename||"?") + ":" + (e.lineno||"?"));
     });
     window.addEventListener("unhandledrejection", (e) => {
       errors.push("PROMESSE REJETÉE : " + (e.reason && e.reason.message || e.reason));
     });
-    // crypto de Node
     const { webcrypto } = require("crypto");
     Object.defineProperty(window, "crypto", { value: webcrypto });
   },
@@ -31,15 +28,8 @@ const dom = new JSDOM(html, {
 
 const { window } = dom;
 
-// Injecter les 5 scripts dans l'ordre via de vraies balises <script>
-// (sémantique identique au navigateur : portée globale partagée)
-for (const f of ["config.js", "eddstore.js", "accounting.js", "reports.js", "ui.js"]) {
-  const code = fs.readFileSync(path.join(appDir, f), "utf8");
-  const s = window.document.createElement("script");
-  s.textContent = code;
-  window.document.body.appendChild(s);
-}
-// Déclencher DOMContentLoaded (les scripts sont chargés après coup)
+// Les scripts inline s'exécutent au parsing ; on déclenche DOMContentLoaded
+// (le démarrage est idempotent : un éventuel double-événement est sans effet).
 window.document.dispatchEvent(new window.Event("DOMContentLoaded", { bubbles: true }));
 window.dispatchEvent(new window.Event("DOMContentLoaded"));
 
@@ -63,6 +53,10 @@ setTimeout(() => {
   check("DB chargée", DBref() && Array.isArray(DBref().accounts),
         DBref() ? DBref().accounts.length + " comptes" : "DB null");
 
+  // 2b. Tous les blocs de code se sont chargés (marqueurs de démarrage)
+  const loaded = window.eval("(window.__L||[]).join(',')");
+  check("Bloc stockage exécuté", loaded.split(",").includes("storage"), loaded);
+
   // 3. Menus déroulants remplis
   const yearOpts = get("yearSelect") ? get("yearSelect").options.length : 0;
   check("Sélecteur d'exercice rempli", yearOpts > 0, yearOpts + " options");
@@ -78,6 +72,9 @@ setTimeout(() => {
   check("Tableau de bord (KPIs) affiché", kpis.length > 0, kpis.length + " caractères");
   const dash = get("dashLast") ? get("dashLast").innerHTML.trim() : "";
   check("Section dernières écritures affichée", dash.length > 0);
+
+  // 4b. Panneau de diagnostic retiré au démarrage normal
+  check("Écran de démarrage retiré", !get("bootDiag"));
 
   // 5. Encodage simple de bout en bout
   try {

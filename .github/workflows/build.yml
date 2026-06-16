@@ -136,9 +136,8 @@ jobs:
                (normal pour un programme non signé).
             3. Lancez « EDD Compta » depuis le menu Démarrer.
 
-            > ⚠ Si vous activez un mot de passe, il est **irrécupérable** s'il est
-            > oublié. Faites régulièrement une sauvegarde JSON (Paramètres) et
-            > conservez-la en lieu sûr.
+            > 💾 Faites régulièrement une **sauvegarde JSON** (onglet Paramètres)
+            > et conservez-la en lieu sûr (clé USB, cloud).
 
             ### Fichiers
             - `*_x64-setup.exe` — installateur Windows (recommandé)

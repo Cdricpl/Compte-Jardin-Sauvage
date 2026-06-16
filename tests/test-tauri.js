@@ -2,14 +2,14 @@
    - ok      : invoke répond normalement (null = première ouverture)
    - reject  : invoke échoue immédiatement
    - hang    : invoke ne répond JAMAIS (le bug « écran vide » rapporté)
-   Dans les 3 cas, les menus et le tableau de bord doivent se remplir. */
+   Dans les 3 cas, les menus et le tableau de bord doivent se remplir.
+   Charge le VRAI index.html livré (code intégré en ligne). */
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
 
 const appDir = path.join(__dirname, "..", "app");
-const html = fs.readFileSync(path.join(appDir, "index.html"), "utf8")
-  .replace(/<script src="[^"]+"><\/script>\s*/g, "");
+const html = fs.readFileSync(path.join(appDir, "index.html"), "utf8");
 
 function boot(mode){
   return new Promise((done)=>{
@@ -29,11 +29,6 @@ function boot(mode){
       },
     });
     const { window } = dom;
-    for (const f of ["config.js","eddstore.js","accounting.js","reports.js","ui.js"]) {
-      const s = window.document.createElement("script");
-      s.textContent = fs.readFileSync(path.join(appDir, f), "utf8");
-      window.document.body.appendChild(s);
-    }
     window.document.dispatchEvent(new window.Event("DOMContentLoaded", {bubbles:true}));
     window.dispatchEvent(new window.Event("DOMContentLoaded"));
     // hang : le timeout de secours est de 3 s → attendre 4 s
